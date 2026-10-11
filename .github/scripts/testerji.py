@@ -34,9 +34,18 @@ if not grupa:
         "relationships": {"app": {"data": {"type": "apps", "id": app["id"]}}}}}).json()["data"]
 print(f"::notice::Interna skupina {grupa['attributes']['name']} ({grupa['id']})")
 
+for u in call("GET", "/users", params={"limit": 50}).json().get("data", []):
+    a = u["attributes"]
+    print(f"::notice::Uporabnik {a.get('username')} {a.get('roles')} vse_aplikacije={a.get('allAppsVisible')}")
+
 for email in [e.strip() for e in os.environ["EMAILS"].split(",") if e.strip()]:
     obst = call("GET", "/betaTesters", params={"filter[email]": email}).json()["data"]
     if obst:
+        r = call("POST", "/betaTesters", json={"data": {"type": "betaTesters", "attributes": {"email": email, "firstName": "Teo", "lastName": "Simonic"},
+                 "relationships": {"betaGroups": {"data": [{"type": "betaGroups", "id": grupa["id"]}]}}}})
+        print(f"::notice::POST betaTesters -> {r.status_code}")
+        if r.status_code < 300:
+            print("::notice::Dodan " + email); continue
         print(f"::notice::Tester obstaja: {obst[0]['attributes']}")
         r = call("POST", f"/betaGroups/{grupa['id']}/relationships/betaTesters",
                  json={"data": [{"type": "betaTesters", "id": obst[0]["id"]}]})
