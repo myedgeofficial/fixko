@@ -1,0 +1,25 @@
+name: TestFlight testerji
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/testerji.yml", ".github/scripts/testerji.py"]
+  workflow_dispatch:
+    inputs:
+      emails:
+        description: "E-pošte, ločene z vejico"
+        default: "teo.simonic7@gmail.com"
+
+jobs:
+  testerji:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyjwt cryptography requests
+      - run: python3 .github/scripts/testerji.py
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+          BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+          EMAILS: ${{ inputs.emails || 'teo.simonic7@gmail.com' }}
