@@ -13,7 +13,7 @@ H = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
 def call(method, path, **kw):
     r = requests.request(method, API + path, headers=H, timeout=60, **kw)
     if r.status_code >= 400:
-        print(f"::warning::{method} {path} -> {r.status_code} {r.text[:400]}")
+        print(f"::warning::{method} {path} -> {r.status_code} {' '.join(r.text.split())[:900]}")
     return r
 
 app = call("GET", "/apps", params={"filter[bundleId]": os.environ["BUNDLE_ID"]}).json()["data"][0]
@@ -24,6 +24,9 @@ for b in call("GET", "/builds", params={"filter[app]": app["id"], "limit": 5, "s
     print(f"::notice::Build {a['version']}: {a['processingState']}")
 
 grupe = call("GET", f"/apps/{app['id']}/betaGroups").json()["data"]
+for g in grupe:
+    a = g["attributes"]
+    print(f"::notice::Skupina {a['name']}: internal={a.get('isInternalGroup')} vsi buildi={a.get('hasAccessToAllBuilds')}")
 grupa = next((g for g in grupe if g["attributes"].get("isInternalGroup")), None)
 if not grupa:
     grupa = call("POST", "/betaGroups", json={"data": {"type": "betaGroups",
@@ -34,6 +37,7 @@ print(f"::notice::Interna skupina {grupa['attributes']['name']} ({grupa['id']})"
 for email in [e.strip() for e in os.environ["EMAILS"].split(",") if e.strip()]:
     obst = call("GET", "/betaTesters", params={"filter[email]": email}).json()["data"]
     if obst:
+        print(f"::notice::Tester obstaja: {obst[0]['attributes']}")
         r = call("POST", f"/betaGroups/{grupa['id']}/relationships/betaTesters",
                  json={"data": [{"type": "betaTesters", "id": obst[0]["id"]}]})
     else:
