@@ -1,0 +1,14 @@
+{
+  "appId": "si.fixko.app",
+  "appName": "Fixko",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#F3F5F4"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

@@ -1,0 +1,68 @@
+rules_version = '2';
+// Fixko: stranke oddajo dela (dela/{id}), mojstri z aktivno naročnino jih vidijo in prevzamejo.
+// Prevzem, naročnino in brisanje izvajajo funkcije na strežniku (Admin SDK, mimo teh pravil).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function prijavljen() { return request.auth != null; }
+    function aktiven() {
+      return prijavljen() && exists(/databases/$(database)/documents/mojstri/$(request.auth.uid))
+        && get(/databases/$(database)/documents/mojstri/$(request.auth.uid)).data.get('narocninaDo', null) is timestamp
+        && get(/databases/$(database)/documents/mojstri/$(request.auth.uid)).data.narocninaDo > request.time;
+    }
+    function besedilo(v, max) { return v is string && v.size() <= max; }
+
+    match /dela/{id} {
+      allow read: if prijavljen() && (
+        resource.data.lastnik == request.auth.uid
+        || resource.data.get('mojster', null) == request.auth.uid
+        || (resource.data.status == 'odprto' && aktiven()));
+      allow create: if prijavljen()
+        && request.resource.data.keys().hasOnly(['lastnik', 'stroka', 'opis', 'regija', 'kraj', 'kdaj', 'slika', 'status', 'ustvarjeno'])
+        && request.resource.data.lastnik == request.auth.uid
+        && request.resource.data.status == 'odprto'
+        && request.resource.data.ustvarjeno == request.time
+        && besedilo(request.resource.data.stroka, 20) && besedilo(request.resource.data.regija, 10)
+        && besedilo(request.resource.data.opis, 200) && besedilo(request.resource.data.kraj, 80) && besedilo(request.resource.data.kdaj, 20)
+        && request.resource.data.kraj.size() > 0
+        && besedilo(request.resource.data.slika, 600) && request.resource.data.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*');
+      // Stranka lahko delo samo zaključi ali prekliče.
+      allow update: if prijavljen() && resource.data.lastnik == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['opravljeno', 'preklicano']
+        && resource.data.status in ['odprto', 'prevzeto'];
+      allow delete: if false;
+
+      // Telefon stranke (in mojstra po prevzemu): vidita ga samo stranka in mojster, ki je delo prevzel.
+      match /zasebno/kontakt {
+        allow read: if prijavljen() && (resource.data.lastnik == request.auth.uid
+          || get(/databases/$(database)/documents/dela/$(id)).data.get('mojster', null) == request.auth.uid);
+        allow create: if prijavljen()
+          && request.resource.data.keys().hasOnly(['lastnik', 'tel', 'push'])
+          && request.resource.data.lastnik == request.auth.uid
+          && besedilo(request.resource.data.tel, 20)
+          && (request.resource.data.push == null || besedilo(request.resource.data.push, 200))
+          && !exists(/databases/$(database)/documents/dela/$(id));
+        allow update, delete: if false;
+      }
+    }
+
+    match /mojstri/{uid} {
+      allow read: if prijavljen() && request.auth.uid == uid;
+      allow create: if prijavljen() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['ime', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
+        && besedilo(request.resource.data.ime, 60) && besedilo(request.resource.data.tel, 20)
+        && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 12
+        && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
+      allow update: if prijavljen() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
+        && besedilo(request.resource.data.ime, 60) && besedilo(request.resource.data.tel, 20)
+        && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 12
+        && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

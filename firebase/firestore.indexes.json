@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "dela",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stroka", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "ustvarjeno", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dela",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lastnik", "order": "ASCENDING" },
+        { "fieldPath": "ustvarjeno", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dela",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "mojster", "order": "ASCENDING" },
+        { "fieldPath": "ustvarjeno", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

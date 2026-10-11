@@ -1,0 +1,60 @@
+name: Strežnik (Firebase)
+
+# Objavi pravila baze in shrambe slik, indekse in funkcije (obvestila mojstrom, prevzem, naročnina, brisanje).
+# Potrebne skrivnosti: FIREBASE_SERVICE_ACCOUNT (JSON), APNS_KEY_P8, APNS_KEY_ID, APPLE_TEAM_ID.
+# Spremenljivki: FIREBASE_PROJECT (privzeto fixko-app), FIXKO_PREIZKUS (1 = brezplačen preizkus za mojstre, dokler naročnina v App Store ni odprta).
+on:
+  push:
+    branches: [main]
+    paths: ["firebase/**", ".github/workflows/firebase.yml"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firebase
+    env:
+      FIREBASE_PROJECT: ${{ vars.FIREBASE_PROJECT || 'fixko-app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Preizkusi besedila obvestil
+        run: npm ci --prefix functions && npm test --prefix functions
+      - name: Preveri skrivnosti
+        id: check
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then echo "::warning::Manjka skrivnost FIREBASE_SERVICE_ACCOUNT, objava preskočena."; echo "ok=no" >> "$GITHUB_OUTPUT"; else echo "ok=yes" >> "$GITHUB_OUTPUT"; fi
+      - name: Objavi
+        if: steps.check.outputs.ok == 'yes'
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          APNS_KEY_P8: ${{ secrets.APNS_KEY_P8 }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APNS_TOPIC: ${{ vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+          PREIZKUS: ${{ vars.FIXKO_PREIZKUS || '1' }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          python3 - <<'PY'
+          import os, re
+          body = re.sub(r"-----[A-Z ]+-----|\\n|\s", "", os.environ.get("APNS_KEY_P8", "").strip())
+          pem = ("-----BEGIN PRIVATE KEY-----\\n" + "\\n".join(body[i:i+64] for i in range(0, len(body), 64)) + "\\n-----END PRIVATE KEY-----") if body else ""
+          with open("functions/.env", "w") as f:
+              for k in ["APNS_KEY_ID", "APPLE_TEAM_ID", "APNS_TOPIC", "PREIZKUS"]:
+                  f.write(f'{k}={os.environ.get(k, "")}\n')
+              f.write(f'APNS_KEY_P8="{pem}"\n')
+          print("Ključ za obvestila:", "da" if body else "manjka")
+          PY
+          FB="npx --yes firebase-tools@14 --project $FIREBASE_PROJECT --non-interactive"
+          # Spletna aplikacija (njene nastavitve uporabi iOS gradnja) in baza v EU, če še ne obstajata.
+          if ! $FB apps:list WEB --json | grep -q '"appId"'; then $FB apps:create WEB "Fixko"; fi
+          $FB firestore:databases:list --json | grep -q '(default)' || $FB firestore:databases:create "(default)" --location eur3 || true
+          $FB deploy --only firestore,storage,functions --force
+          rm -f "$RUNNER_TEMP/sa.json" functions/.env
