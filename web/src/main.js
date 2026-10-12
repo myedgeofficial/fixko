@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { Preferences } from "@capacitor/preferences";
+import { Geolocation } from "@capacitor/geolocation";
 import { initializeApp } from "firebase/app";
 import { initializeAuth, indexedDBLocalPersistence, signInAnonymously, onAuthStateChanged, connectAuthEmulator } from "firebase/auth";
 import {
@@ -10,6 +11,7 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
 import { STROKE, REGIJE, KDAJ, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel } from "./data.js";
+import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 
 const FixkoPay = registerPlugin("FixkoPay");
 const native = Capacitor.isNativePlatform();
@@ -47,7 +49,7 @@ const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
 
 /* ---------- stanje ---------- */
 const S = { myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true };
-let draft = { cat: "", kdaj: KDAJ[0], photo: null, blob: null, opis: "" };
+let draft = { cat: "", photo: null, blob: null, opis: "" };
 const unsub = [];
 
 /* ---------- obvestila ---------- */
@@ -82,6 +84,9 @@ function setRole(r) { prefs.role = r; savePrefs(); render(); }
 function render() {
   document.getElementById("tabN").setAttribute("aria-pressed", prefs.role === "N");
   document.getElementById("tabM").setAttribute("aria-pressed", prefs.role === "M");
+  // Oglasna pasica samo pri strankah (mojstri plačujejo naročnino).
+  document.getElementById("oglas").hidden = prefs.role !== "N";
+  document.body.classList.toggle("z-oglasom", prefs.role === "N");
   prefs.role === "N" ? renderN() : renderM();
 }
 
@@ -90,71 +95,128 @@ const pic = (j) => `<div class="pic">${j.slika ? `<img src="${esc(j.slika)}" alt
 const opt = (list, sel, prazno) => (prazno ? `<option value="">${prazno}</option>` : "") + list.map(([k, n]) => `<option value="${k}"${k === sel ? " selected" : ""}>${n}</option>`).join("");
 
 /* =================== STRANKA =================== */
+// Preprosto za starejše: slika ali opis, stroka in kraj se prepoznata sama.
+const kamera = `<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3.5l1.7-2.5h7.6L17.5 8H21v11H3z"/><circle cx="12" cy="13.5" r="3.6"/></svg>`;
+const pin = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>`;
+const kdo = (k) => ({ vodovod: "vodovodar", elektrika: "električar", keramika: "keramičar", pleskanje: "pleskar", mizarstvo: "mizar", montaza: "monter pohištva", ogrevanje: "serviser ogrevanja in klime", streha: "krovec", vrt: "vrtnar", ciscenje: "čistilni servis", selitve: "selitveni servis", drugo: "hišnik" }[k] || strokaIme(k));
+
+let iscem = false;
+async function najdiLokacijo(vprasaj) {
+  if (iscem) return; iscem = true;
+  try {
+    let p = await Geolocation.checkPermissions();
+    if (p.location !== "granted" && vprasaj) p = await Geolocation.requestPermissions();
+    if (p.location !== "granted") throw new Error("ni dovoljenja");
+    const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+    const k = krajIzLokacije(pos.coords.latitude, pos.coords.longitude);
+    if (k && !prefs.krajRocno) { prefs.kraj = k.kraj; prefs.regija = k.regija; savePrefs(); }
+    else if (!k && vprasaj) draft.urejamKraj = true;
+  } catch (e) { if (vprasaj) draft.urejamKraj = true; }
+  iscem = false;
+  if (prefs.role === "N") osveziKraj();
+}
+
 function renderN() {
+  const stroka = draft.cat;
   view.innerHTML = `
-  <h1>Poslikaj, kaj je treba narediti</h1>
-  <p class="lead">Mojster v tvoji okolici dobi obvestilo, izbere termin in te pokliče. Za stranke je Fixko brezplačen.</p>
+  <h1>Kaj je treba popraviti?</h1>
   <form id="f" novalidate>
-    <label class="shot" for="file">${draft.photo ? `<img src="${draft.photo}" alt="Tvoja slika">` : `${icon()}<span>Poslikaj</span><small>ali izberi sliko iz galerije</small>`}</label>
+    <label class="shot${draft.photo ? " ima" : ""}" for="file">${draft.photo ? `<img src="${draft.photo}" alt="Vaša slika"><span class="zamenjaj">Zamenjaj sliko</span>` : `${kamera}<b>Fotografirajte</b><small>ali izberite sliko</small>`}</label>
     <input id="file" type="file" accept="image/*" hidden>
-    <label>Kdo ti pomaga?</label>
-    <div class="chips" id="cats">${STROKE.map(([k, n]) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${draft.cat === k}">${n}</button>`).join("")}</div>
-    <label for="opis">Kaj je narobe <span class="meta">(ni obvezno)</span></label>
-    <input id="opis" maxlength="200" placeholder="npr. Menjava tuš kabine" value="${esc(draft.opis)}">
-    <label for="regija">Regija</label>
-    <select id="regija">${opt(REGIJE, prefs.regija, "Izberi regijo")}</select>
-    <label for="kraj">Kraj ali naslov</label>
-    <input id="kraj" maxlength="80" placeholder="npr. Maribor, Tabor" value="${esc(prefs.kraj)}" autocomplete="address-level2">
-    <label for="tel">Tvoja telefonska</label>
+
+    <label for="opis" class="big">Na kratko opišite</label>
+    <textarea id="opis" rows="2" maxlength="200" placeholder="npr. Pušča pipa v kuhinji">${esc(draft.opis)}</textarea>
+    <p class="hint">Lahko tudi poveste: tapnite mikrofon na tipkovnici.</p>
+    <div id="stroka"></div>
+
+    <div id="kraj"></div>
+
+    <label for="tel" class="big">Vaša telefonska številka</label>
     <input id="tel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(prefs.tel)}" autocomplete="tel">
-    <label>Kdaj ti paše?</label>
-    <div class="chips" id="kdaj">${KDAJ.map((k) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${draft.kdaj === k}">${k}</button>`).join("")}</div>
+
     <div class="err" id="err" hidden></div>
-    <button class="btn" type="submit" id="send">Pošlji mojstrom</button>
-    <p class="note">Številko vidi samo mojster, ki delo prevzame.</p>
+    <button class="btn big" type="submit" id="send">Pošlji mojstrom</button>
+    <p class="note">Mojster vas pokliče in se dogovori za termin. Za vas je Fixko brezplačen.</p>
   </form>
-  <h2>Moja dela</h2>
-  <div class="list">${S.myJobs.length ? S.myJobs.map(cardN).join("") : `<div class="empty">Tu vidiš, kateri mojster pride in kdaj.</div>`}</div>`;
+  ${S.myJobs.length ? `<h2>Moja naročila</h2><div class="list">${S.myJobs.map(cardN).join("")}</div>` : ""}`;
 
   const f = document.getElementById("f");
-  const keep = () => { draft.opis = f.opis.value; prefs.regija = f.regija.value; prefs.kraj = f.kraj.value; prefs.tel = f.tel.value; };
-  f.querySelectorAll("#cats .chip").forEach((b) => (b.onclick = () => { keep(); draft.cat = b.dataset.k; renderN(); }));
-  f.querySelectorAll("#kdaj .chip").forEach((b) => (b.onclick = () => { keep(); draft.kdaj = b.dataset.k; renderN(); }));
+  const keep = () => { draft.opis = f.opis.value; prefs.tel = f.tel.value; const k = document.getElementById("krajIn"); if (k) { prefs.kraj = k.value; } };
+  f.opis.oninput = () => { draft.opis = f.opis.value; if (!draft.catRocno) { draft.cat = prepoznajStroko(draft.opis); } osveziStroko(); };
   document.getElementById("file").onchange = (e) => {
     const fl = e.target.files[0]; if (!fl) return; keep();
-    shrink(fl).then(({ url, blob }) => { draft.photo = url; draft.blob = blob; renderN(); }).catch(() => toast("Slike ni bilo mogoče odpreti", "Poskusi z drugo sliko."));
+    shrink(fl).then(({ url, blob }) => { draft.photo = url; draft.blob = blob; renderN(); }).catch(() => toast("Slike ni bilo mogoče odpreti", "Poskusite z drugo sliko."));
   };
   view.querySelectorAll("[data-done]").forEach((b) => (b.onclick = () => setStatus(b.dataset.done, "opravljeno")));
   view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => setStatus(b.dataset.cancel, "preklicano")));
+  osveziStroko(); osveziKraj();
+  if (!prefs.kraj && !draft.urejamKraj && !draft.vprasal) { draft.vprasal = true; najdiLokacijo(true); }
+
   f.onsubmit = async (e) => {
-    e.preventDefault(); keep(); savePrefs();
-    const err = (t) => { const el = document.getElementById("err"); el.textContent = t; el.hidden = false; };
-    if (!draft.blob) return err("Dodaj sliko, da mojster vidi, za kaj gre.");
-    if (!draft.cat) return err("Izberi, kdo ti pomaga.");
-    if (!prefs.regija) return err("Izberi regijo.");
-    if (!prefs.kraj.trim()) return err("Vpiši kraj ali naslov.");
-    if (!veljavenTel(prefs.tel)) return err("Vpiši telefonsko številko, npr. 041 123 456.");
+    e.preventDefault(); keep();
+    if (!prefs.regija) prefs.regija = regijaIzKraja(prefs.kraj);
+    savePrefs();
+    const err = (t) => { const el = document.getElementById("err"); el.textContent = t; el.hidden = false; el.scrollIntoView({ block: "center", behavior: "smooth" }); };
+    if (!draft.blob && draft.opis.trim().length < 3) return err("Fotografirajte ali na kratko opišite, kaj je treba narediti.");
+    if (!draft.cat) { draft.izberi = true; osveziStroko(); return err("Izberite, kdo vam lahko pomaga."); }
+    if (!prefs.kraj.trim()) { draft.urejamKraj = true; osveziKraj(); return err("Vpišite kraj, kamor naj pride mojster."); }
+    if (!prefs.regija) { draft.urejamKraj = true; osveziKraj(); return err("Izberite območje."); }
+    if (!veljavenTel(prefs.tel)) return err("Vpišite telefonsko številko, npr. 041 123 456.");
+    if (!db) return err("Fixko še ni povezan s strežnikom. Poskusite malo kasneje.");
     const btn = document.getElementById("send"); btn.disabled = true; btn.textContent = "Pošiljam ...";
     try {
       const id = doc(collection(db, "dela")).id;
-      const r = ref(storage, `slike/${uid}/${id}.jpg`);
-      await uploadBytes(r, draft.blob, { contentType: "image/jpeg" });
-      const slika = await getDownloadURL(r);
+      let slika = "";
+      if (draft.blob) {
+        const r = ref(storage, `slike/${uid}/${id}.jpg`);
+        await uploadBytes(r, draft.blob, { contentType: "image/jpeg" });
+        slika = await getDownloadURL(r);
+      }
       const push = await enablePush();
       await setDoc(doc(db, "dela", id, "zasebno", "kontakt"), { lastnik: uid, tel: prefs.tel.trim(), push: push || null });
       await setDoc(doc(db, "dela", id), {
         lastnik: uid, stroka: draft.cat, opis: draft.opis.trim().slice(0, 200), regija: prefs.regija, kraj: prefs.kraj.trim().slice(0, 80),
-        kdaj: draft.kdaj, slika, status: "odprto", ustvarjeno: serverTimestamp()
+        kdaj: KDAJ[0], slika, status: "odprto", ustvarjeno: serverTimestamp()
       });
-      draft = { cat: draft.cat, kdaj: draft.kdaj, photo: null, blob: null, opis: "" };
+      draft = { cat: "", photo: null, blob: null, opis: "", vprasal: true };
       renderN();
-      toast("Poslano mojstrom", "Ko delo kdo prevzame, ti pokažemo, kdo pride in kdaj.");
+      toast("Poslano mojstrom", "Ko se mojster oglasi, vas pokliče. Tukaj vidite, kdo pride in kdaj.");
     } catch (x) {
       console.error(x);
       btn.disabled = false; btn.textContent = "Pošlji mojstrom";
-      err("Pošiljanje ni uspelo. Preveri internet in poskusi znova.");
+      err("Pošiljanje ni uspelo. Preverite internet in poskusite znova.");
     }
   };
+}
+function osveziStroko() {
+  const el = document.getElementById("stroka"); if (!el) return;
+  if (draft.cat && !draft.izberi) {
+    el.innerHTML = `<div class="najdeno"><div><small>Pomagal vam bo</small><b>${esc(kdo(draft.cat)[0].toUpperCase() + kdo(draft.cat).slice(1))}</b></div><button class="link" type="button" id="drug">Spremeni</button></div>`;
+    el.querySelector("#drug").onclick = () => { draft.izberi = true; osveziStroko(); };
+  } else if (draft.izberi || (draft.opis.trim().length > 12 && !draft.cat)) {
+    el.innerHTML = `<label class="big">Kdo vam lahko pomaga?</label><div class="mreza">${STROKE.map(([k, n]) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${draft.cat === k}">${n}</button>`).join("")}</div>`;
+    el.querySelectorAll(".chip").forEach((b) => (b.onclick = () => { draft.cat = b.dataset.k; draft.catRocno = true; draft.izberi = false; document.getElementById("err").hidden = true; osveziStroko(); }));
+  } else el.innerHTML = "";
+}
+function osveziKraj() {
+  const el = document.getElementById("kraj"); if (!el) return;
+  if (!draft.urejamKraj && prefs.kraj) {
+    el.innerHTML = `<div class="najdeno">${pin}<div><small>Vaš kraj</small><b>${esc(prefs.kraj)}</b></div><button class="link" type="button" id="ured">Spremeni</button></div>`;
+    el.querySelector("#ured").onclick = () => { draft.urejamKraj = true; osveziKraj(); document.getElementById("krajIn")?.focus(); };
+  } else if (iscem) {
+    el.innerHTML = `<div class="najdeno">${pin}<div><small>Iščem vašo lokacijo ...</small></div></div>`;
+  } else {
+    const neznana = prefs.kraj && !regijaIzKraja(prefs.kraj);
+    el.innerHTML = `<label for="krajIn" class="big">Kam naj pride mojster?</label>
+      <input id="krajIn" maxlength="80" placeholder="Kraj, npr. Maribor" value="${esc(prefs.kraj)}" autocomplete="address-level2">
+      ${neznana || (prefs.kraj && !prefs.regija) ? `<select id="regIn" aria-label="Območje">${opt(REGIJE, prefs.regija, "Izberite območje")}</select>` : ""}
+      ${native || navigator.geolocation ? `<button class="link lok" type="button" id="lok">${pin} Uporabi mojo lokacijo</button>` : ""}`;
+    const inp = el.querySelector("#krajIn");
+    inp.oninput = () => { prefs.kraj = inp.value; prefs.krajRocno = true; const r = regijaIzKraja(inp.value); if (r) prefs.regija = r; else prefs.regija = el.querySelector("#regIn")?.value || ""; };
+    inp.onchange = () => { if (!regijaIzKraja(inp.value) && !el.querySelector("#regIn")) { osveziKraj(); } };
+    el.querySelector("#regIn")?.addEventListener("change", (e) => { prefs.regija = e.target.value; });
+    el.querySelector("#lok")?.addEventListener("click", () => { draft.urejamKraj = false; prefs.krajRocno = false; najdiLokacijo(true); osveziKraj(); });
+  }
 }
 function cardN(j) {
   const k = S.kontakti[j.id] || {};
@@ -186,6 +248,7 @@ function watchMine() {
 /* =================== MOJSTER =================== */
 const aktiven = () => S.mojster?.narocninaDo && S.mojster.narocninaDo.toMillis() > Date.now();
 function renderM() {
+  if (!db) { view.innerHTML = `<div class="empty">Del za mojstre bo deloval, ko bo Fixko povezan s strežnikom.</div>`; return; }
   if (!S.mojster || S.urejam) return renderProfil();
   if (!aktiven()) return renderPaywall();
   const prosta = S.feed.filter((j) => j.status === "odprto" && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));
@@ -413,9 +476,11 @@ function shrink(file) {
 /* ---------- zagon ---------- */
 (async function start() {
   await loadPrefs();
-  if (!cfg) { view.innerHTML = `<div class="empty">Strežnik še ni povezan.</div>`; return; }
+  // Lokacija ob vsaki uporabi (če je dovoljena in kraja niste vpisali sami).
+  if (!prefs.krajRocno) najdiLokacijo(false);
+  if (!cfg) { render(); return; }
   try { await initFb(); } catch (e) {
-    console.error(e); view.innerHTML = `<div class="empty">Ni povezave. Preveri internet in odpri Fixko znova.</div>`; return;
+    console.error(e); view.innerHTML = `<div class="empty">Ni povezave. Preverite internet in odprite Fixko znova.</div>`; return;
   }
   render();
   watchMine();

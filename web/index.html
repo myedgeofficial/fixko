@@ -9,19 +9,20 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="logo">
-        <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="9" fill="var(--accent)"/><path d="M8 17.5 17 10l9 7.5V26H8z" fill="none" stroke="var(--accent-ink)" stroke-width="2.2" stroke-linejoin="round"/><path d="M14.5 26v-5.5h5V26" fill="none" stroke="var(--accent-ink)" stroke-width="2.2"/></svg>
-        Fixko
-      </div>
-      <button class="link" id="nast" type="button">Nastavitve</button>
+      <div class="logo"><img src="logo.png" width="40" height="40" alt="">Fixko</div>
+      <button class="gear" id="nast" type="button" aria-label="Nastavitve">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
     </header>
-    <div class="switch" role="group" aria-label="Kdo si">
+    <div class="switch" role="group" aria-label="Kdo ste">
       <button type="button" id="tabN" aria-pressed="true">Rabim mojstra</button>
       <button type="button" id="tabM" aria-pressed="false">Sem mojster</button>
     </div>
     <main id="view"><div class="spin">Nalagam ...</div></main>
     <div class="foot"><a class="link" href="zasebnost.html">Zasebnost in pogoji</a></div>
   </div>
+  <!-- Oglasna pasica (AdMob 320×50): prostor je rezerviran, oglas pride kasneje. Mojstri z naročnino je ne vidijo. -->
+  <div class="oglas" id="oglas" hidden aria-hidden="true"><span>Oglas</span></div>
   <script src="app.js"></script>
 </body>
 </html>

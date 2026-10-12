@@ -94,7 +94,7 @@ exports.prevzemi = onCall(async (req) => {
     return { delo: d.data(), kontakt: k.exists ? k.data() : {}, mojster: m.data() };
   });
   if (kontakt.push) {
-    await sendApns([kontakt.push], mojster.ime + " pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Pred prihodom te pokliče.", { vloga: "N", delo: id });
+    await sendApns([kontakt.push], mojster.ime + " pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Pred prihodom vas pokliče.", { vloga: "N", delo: id });
   }
   return { tel: kontakt.tel || "" };
 });

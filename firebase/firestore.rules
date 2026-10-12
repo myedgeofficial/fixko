@@ -24,7 +24,7 @@ service cloud.firestore {
         && besedilo(request.resource.data.stroka, 20) && besedilo(request.resource.data.regija, 10)
         && besedilo(request.resource.data.opis, 200) && besedilo(request.resource.data.kraj, 80) && besedilo(request.resource.data.kdaj, 20)
         && request.resource.data.kraj.size() > 0
-        && besedilo(request.resource.data.slika, 600) && request.resource.data.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*');
+        && besedilo(request.resource.data.slika, 600) && (request.resource.data.slika == '' || request.resource.data.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*'));
       // Stranka lahko delo samo zaključi ali prekliče.
       allow update: if prijavljen() && resource.data.lastnik == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@capacitor/core": "^8.5.3",
+    "@capacitor/geolocation": "^8.2.3",
     "@capacitor/ios": "^8.5.3",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.1.3",

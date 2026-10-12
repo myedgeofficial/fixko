@@ -15,7 +15,7 @@ esbuild.buildSync({
   outfile: path.join(out, "app.js"), legalComments: "none", logLevel: "warning",
   nodePaths: [path.resolve(__dirname, "..", "node_modules")]
 });
-for (const f of ["index.html", "app.css", "zasebnost.html"]) fs.copyFileSync(path.join(web, f), path.join(out, f));
+for (const f of ["index.html", "app.css", "zasebnost.html", "logo.png"]) fs.copyFileSync(path.join(web, f), path.join(out, f));
 
 let cfg = process.env.FIXKO_FB_CONFIG || "";
 const file = path.resolve(__dirname, "..", "fb-config.json");
@@ -27,6 +27,6 @@ if (cfg) {
   fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace('<script src="app.js">', '<script src="fb-config.js"></script>\n  <script src="app.js">'));
   console.log("Strežnik:", json.projectId);
 } else {
-  console.log("::warning::Ni nastavitev Firebase (FIXKO_FB_CONFIG). Aplikacija bo pokazala »Strežnik še ni povezan«.");
+  console.log("::warning::Ni nastavitev Firebase (FIXKO_FB_CONFIG). Pošiljanje del ne bo delovalo.");
 }
 console.log("www pripravljen:", fs.readdirSync(out).join(", "));
