@@ -12,6 +12,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } 
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
 import { STROKE, REGIJE, KDAJ, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, POGOJI_VERZIJA } from "./data.js";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
+import { ikona } from "./ikone.js";
 
 const FixkoPay = registerPlugin("FixkoPay");
 const native = Capacitor.isNativePlatform();
@@ -80,8 +81,12 @@ if (native) {
 document.getElementById("tabN").onclick = () => setRole("N");
 document.getElementById("tabM").onclick = () => setRole("M");
 document.getElementById("nast").onclick = () => settingsSheet();
-function setRole(r) { prefs.role = r; savePrefs(); render(); }
+document.getElementById("pomoc").onclick = () => pomocSheet();
+function setRole(r) { prefs.role = r; prefs.uvod = true; savePrefs(); render(); window.scrollTo(0, 0); }
 function render() {
+  const uvod = !prefs.uvod;
+  document.querySelector(".switch").hidden = uvod;
+  if (uvod) { document.getElementById("oglas").hidden = true; document.body.classList.remove("z-oglasom"); return renderUvod(); }
   document.getElementById("tabN").setAttribute("aria-pressed", prefs.role === "N");
   document.getElementById("tabM").setAttribute("aria-pressed", prefs.role === "M");
   // Oglasna pasica samo pri strankah (mojstri plačujejo naročnino).
@@ -93,6 +98,39 @@ function render() {
 const icon = (s = 48) => `<svg width="${s}" height="${s}" viewBox="0 0 28 28" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l2-3h8l2 3h4v13H4z"/><circle cx="14" cy="15" r="4"/></svg>`;
 const pic = (j) => `<div class="pic">${j.slika ? `<img src="${esc(j.slika)}" alt="" loading="lazy">` : icon(56)}</div>`;
 const opt = (list, sel, prazno) => (prazno ? `<option value="">${prazno}</option>` : "") + list.map(([k, n]) => `<option value="${k}"${k === sel ? " selected" : ""}>${n}</option>`).join("");
+
+/* =================== UVOD =================== */
+// Prvi zagon: kaj je Fixko in kdo ste, z dvema velikima gumboma.
+const KORAKI = {
+  N: [["kamera", "Fotografirajte ali opišite", "Kaj je narobe. Fixko sam ugotovi, kateri mojster je pravi."], ["telefon", "Mojster vas pokliče", "Dogovorite se za ceno in termin."], ["dom", "Mojster pride", "V aplikaciji vidite njegovo ime, sliko in podjetje."]],
+  M: [["mojster", "Uredi profil", "Slika, podjetje, stroka in kje delaš."], ["kamera", "Dobiš obvestilo", "Ko nekdo v tvoji bližini rabi tvojo stroko."], ["telefon", "Prevzemi in pokliči", "Izbereš termin, stranka te pričakuje."]]
+};
+const koraki = (r) => `<ol class="koraki">${KORAKI[r].map(([ik, t, m], i) => `<li><span class="kn">${ikona(ik, 26)}<i>${i + 1}</i></span><div><b>${t}</b><small>${m}</small></div></li>`).join("")}</ol>`;
+function renderUvod() {
+  view.innerHTML = `
+  <div class="uvod">
+    <img src="logo.png" width="88" height="88" alt="">
+    <h1>Mojster na vašem domu</h1>
+    <p class="lead">Pipa pušča, luč ne gori, vrata škripajo? Fixko poišče mojstra v vaši bližini.</p>
+  </div>
+  ${koraki("N")}
+  <h2 class="kdo">Kdo ste?</h2>
+  <button class="izbira" type="button" data-r="N"><span>${ikona("dom", 34)}</span><div><b>Rabim mojstra</b><small>Brezplačno za vas</small></div></button>
+  <button class="izbira" type="button" data-r="M"><span>${ikona("orodje", 34)}</span><div><b>Sem mojster</b><small>Dobivajte nova dela v bližini</small></div></button>`;
+  view.querySelectorAll(".izbira").forEach((b) => (b.onclick = () => setRole(b.dataset.r)));
+}
+function pomocSheet() {
+  const r = prefs.uvod ? prefs.role : "N";
+  const d = document.createElement("div"); d.className = "sheet";
+  d.innerHTML = `<div role="dialog" aria-label="Kako deluje"><h2 style="margin-top:0">Kako deluje</h2>
+    ${koraki(r)}
+    ${r === "N" ? `<p class="lead">Ne veste, kateri mojster? Samo opišite težavo, Fixko izbere sam. Ne veste, kako napisati? Tapnite mikrofon na tipkovnici in povejte.</p>` : `<p class="lead">Stranka vidi tvojo sliko, ime, podjetje in davčno številko, zato ti lažje zaupa.</p>`}
+    <p class="lead">Vprašanja: <a class="link" href="mailto:urska.repusic@gmail.com">urska.repusic@gmail.com</a></p>
+    <button class="btn" type="button" id="x">Razumem</button></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  d.querySelector("#x").onclick = () => d.remove();
+}
 
 /* =================== STRANKA =================== */
 // Preprosto za starejše: slika ali opis, stroka in kraj se prepoznata sama.
@@ -117,28 +155,31 @@ async function najdiLokacijo(vprasaj) {
 }
 
 function renderN() {
-  const stroka = draft.cat;
+  const aktivna = S.myJobs.filter((j) => j.status === "odprto" || j.status === "prevzeto");
+  const stara = S.myJobs.filter((j) => !aktivna.includes(j));
   view.innerHTML = `
-  <h1>Kaj je treba popraviti?</h1>
+  ${aktivna.length ? `<h2 class="prvi">Vaša naročila</h2><div class="list">${aktivna.map(cardN).join("")}</div><h2>Novo naročilo</h2>` : `<h1>Kaj je treba popraviti?</h1>`}
   <form id="f" novalidate>
-    <label class="shot${draft.photo ? " ima" : ""}" for="file">${draft.photo ? `<img src="${draft.photo}" alt="Vaša slika"><span class="zamenjaj">Zamenjaj sliko</span>` : `${kamera}<b>Fotografirajte</b><small>ali izberite sliko</small>`}</label>
+    <div class="korak"><span>1</span>Pokažite ali opišite</div>
+    <label class="shot${draft.photo ? " ima" : ""}" for="file">${draft.photo ? `<img src="${draft.photo}" alt="Vaša slika"><span class="zamenjaj">Zamenjaj sliko</span>` : `${ikona("kamera", 46, 1.6)}<b>Fotografirajte</b><small>ali izberite sliko iz telefona</small>`}</label>
     <input id="file" type="file" accept="image/*" hidden>
 
     <label for="opis" class="big">Na kratko opišite</label>
     <textarea id="opis" rows="2" maxlength="200" placeholder="npr. Pušča pipa v kuhinji">${esc(draft.opis)}</textarea>
     <p class="hint">Lahko tudi poveste: tapnite mikrofon na tipkovnici.</p>
-    <div id="stroka"></div>
 
+    <div class="korak"><span>2</span>Kdo in kam</div>
+    <div id="stroka"></div>
     <div id="kraj"></div>
 
-    <label for="tel" class="big">Vaša telefonska številka</label>
-    <input id="tel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(prefs.tel)}" autocomplete="tel">
+    <div class="korak"><span>3</span>Kam naj vas mojster pokliče</div>
+    <input id="tel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(prefs.tel)}" autocomplete="tel" aria-label="Vaša telefonska številka">
 
     <div class="err" id="err" hidden></div>
     <button class="btn big" type="submit" id="send">Pošlji mojstrom</button>
     <p class="note">Mojster vas pokliče in se dogovori za termin. Za vas je Fixko brezplačen. S pošiljanjem sprejemate <a class="link" href="pogoji.html">pogoje uporabe</a> in <a class="link" href="zasebnost.html">politiko zasebnosti</a>.</p>
   </form>
-  ${S.myJobs.length ? `<h2>Moja naročila</h2><div class="list">${S.myJobs.map(cardN).join("")}</div>` : ""}`;
+  ${stara.length ? `<h2>Prejšnja naročila</h2><div class="list">${stara.map(cardN).join("")}</div>` : ""}`;
 
   const f = document.getElementById("f");
   const keep = () => { draft.opis = f.opis.value; prefs.tel = f.tel.value; const k = document.getElementById("krajIn"); if (k) { prefs.kraj = k.value; } };
@@ -197,20 +238,20 @@ function renderN() {
 function osveziStroko() {
   const el = document.getElementById("stroka"); if (!el) return;
   if (draft.cat && !draft.izberi) {
-    el.innerHTML = `<div class="najdeno"><div><small>Pomagal vam bo</small><b>${esc(kdo(draft.cat)[0].toUpperCase() + kdo(draft.cat).slice(1))}</b></div><button class="link" type="button" id="drug">Spremeni</button></div>`;
+    el.innerHTML = `<div class="najdeno"><span class="ik">${ikona(draft.cat, 26)}</span><div><small>Pomagal vam bo</small><b>${esc(kdo(draft.cat)[0].toUpperCase() + kdo(draft.cat).slice(1))}</b></div><button class="link" type="button" id="drug">Spremeni</button></div>`;
     el.querySelector("#drug").onclick = () => { draft.izberi = true; osveziStroko(); };
   } else if (draft.izberi || (draft.opis.trim().length > 12 && !draft.cat)) {
-    el.innerHTML = `<label class="big">Kdo vam lahko pomaga?</label><div class="mreza">${STROKE.map(([k, n]) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${draft.cat === k}">${n}</button>`).join("")}</div>`;
+    el.innerHTML = `<label class="big">Kdo vam lahko pomaga?</label><div class="mreza">${STROKE.map(([k, n]) => `<button type="button" class="chip ikchip" data-k="${k}" aria-pressed="${draft.cat === k}">${ikona(k, 24)}<span>${n}</span></button>`).join("")}</div>`;
     el.querySelectorAll(".chip").forEach((b) => (b.onclick = () => { draft.cat = b.dataset.k; draft.catRocno = true; draft.izberi = false; document.getElementById("err").hidden = true; osveziStroko(); }));
   } else el.innerHTML = "";
 }
 function osveziKraj() {
   const el = document.getElementById("kraj"); if (!el) return;
   if (!draft.urejamKraj && prefs.kraj) {
-    el.innerHTML = `<div class="najdeno">${pin}<div><small>Vaš kraj</small><b>${esc(prefs.kraj)}</b></div><button class="link" type="button" id="ured">Spremeni</button></div>`;
+    el.innerHTML = `<div class="najdeno"><span class="ik">${ikona("pin", 26)}</span><div><small>Mojster pride v kraj</small><b>${esc(prefs.kraj)}</b></div><button class="link" type="button" id="ured">Spremeni</button></div>`;
     el.querySelector("#ured").onclick = () => { draft.urejamKraj = true; osveziKraj(); document.getElementById("krajIn")?.focus(); };
   } else if (iscem) {
-    el.innerHTML = `<div class="najdeno">${pin}<div><small>Iščem vašo lokacijo ...</small></div></div>`;
+    el.innerHTML = `<div class="najdeno"><span class="ik">${ikona("pin", 26)}</span><div><small>Iščem vašo lokacijo ...</small></div></div>`;
   } else {
     const neznana = prefs.kraj && !regijaIzKraja(prefs.kraj);
     el.innerHTML = `<label for="krajIn" class="big">Kam naj pride mojster?</label>
@@ -235,8 +276,11 @@ function cardN(j) {
     <div class="row"><button class="btn small ghost" type="button" data-done="${j.id}">Delo je opravljeno</button><button class="link muted" type="button" data-prijavim="${j.id}">Prijavi mojstra</button></div>`;
   else st = `<div class="status"><span class="dot"></span>${j.obvesceni ? `Obvestili smo ${mojstrov(j.obvesceni)}, čakam ...` : "Čakam, da se oglasi mojster ..."}</div>
     <div class="row"><button class="link" type="button" data-cancel="${j.id}">Prekliči</button></div>`;
-  return `<div class="job">${pic(j)}<div class="body"><span class="tag">${strokaIme(j.stroka)}</span><h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${st}</div></div>`;
+  const n = { odprto: 1, prevzeto: 2, opravljeno: 3 }[j.status] || 0;
+  const pot = n ? `<ol class="pot">${["Poslano", "Mojster prihaja", "Opravljeno"].map((t, i) => `<li class="${i < n ? "da" : ""}${i === n - 1 ? " zdaj" : ""}"><span>${i < n ? ikona("kljukica", 14, 3) : ""}</span>${t}</li>`).join("")}</ol>` : "";
+  return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${pot}${st}</div></div>`;
 }
+const tag = (k) => `<span class="tag">${ikona(k, 16, 2.2)}${strokaIme(k)}</span>`;
 const mojstrov = (n) => n + (n % 100 === 1 || n % 100 === 2 ? " mojstra" : n % 100 === 3 || n % 100 === 4 ? " mojstre" : " mojstrov");
 async function setStatus(id, status) {
   try { await updateDoc(doc(db, "dela", id), { status }); } catch (e) { toast("Ni uspelo", "Preveri internet in poskusi znova."); }
@@ -264,7 +308,7 @@ function renderM() {
   <div class="bar"><span>${(S.mojster.stroke || []).map(strokaIme).join(", ")} · ${(S.mojster.regije || []).map(regijaIme).join(", ")}</span><button class="link" id="edit" type="button">Uredi</button></div>
   ${S.taken.filter((j) => j.status === "prevzeto").length ? `<h2>Moja dela</h2><div class="list">${S.taken.filter((j) => j.status === "prevzeto").map(cardTaken).join("")}</div>` : ""}
   <h2>Prosta dela</h2>
-  <div class="list">${prosta.length ? prosta.map(cardM).join("") : `<div class="empty">Ta hip ni prostih del v tvoji stroki in regiji. Ko se kaj sprosti, dobiš obvestilo.</div>`}</div>`;
+  <div class="list">${prosta.length ? prosta.map(cardM).join("") : `<div class="empty">${ikona("orodje", 40, 1.5)}<b>Trenutno ni prostih del</b>Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo.</div>`}</div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
   view.querySelectorAll("[data-take]").forEach((b) => (b.onclick = () => takeSheet(prosta.find((j) => j.id === b.dataset.take))));
   view.querySelectorAll("[data-prijavi]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavi, kdo: "objava" })));
@@ -272,14 +316,14 @@ function renderM() {
 const profilPopoln = (m) => !!(m && m.slika && m.firma && m.davcna && m.pogoji === POGOJI_VERZIJA);
 function cardM(j) {
   const nov = !S.seen.has(j.id) && j.ustvarjeno && Date.now() - j.ustvarjeno.toMillis() < 3600e3;
-  return `<div class="job">${pic(j)}<div class="body"><span class="tag">${strokaIme(j.stroka)}</span>${nov ? '<span class="new">Novo</span>' : ""}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
+  return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}${nov ? '<span class="new">Novo</span>' : ""}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
     <div class="meta">${esc(j.kraj)} · ${esc(j.kdaj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>
     <button class="btn" type="button" data-take="${j.id}" style="margin-top:12px">Prevzemi delo</button>
     <div class="row"><button class="link muted" type="button" data-prijavi="${j.id}">Prijavi ali skrij objavo</button></div></div></div>`;
 }
 function cardTaken(j) {
   const k = S.kontakti[j.id] || {};
-  return `<div class="job">${pic(j)}<div class="body"><span class="tag">${strokaIme(j.stroka)}</span><h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
+  return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
     <div class="meta">${esc(j.kraj)}</div>
     <div class="status"><span class="dot ok"></span>Tvoj termin: ${esc(opisTermina(j.termin))}</div>
     ${k.tel ? `<div class="row"><span class="phone">${esc(k.tel)}</span><a class="btn small" href="tel:${esc(k.tel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}</div></div>`;
@@ -308,7 +352,7 @@ function renderProfil() {
     <label for="mtel">Telefon</label>
     <input id="mtel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(m.tel || "")}">
     <label>Tvoja stroka</label>
-    <div class="chips" id="st">${STROKE.map(([k, n]) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${sel.stroke.has(k)}">${n}</button>`).join("")}</div>
+    <div class="mreza" id="st">${STROKE.map(([k, n]) => `<button type="button" class="chip ikchip" data-k="${k}" aria-pressed="${sel.stroke.has(k)}">${ikona(k, 24)}<span>${n}</span></button>`).join("")}</div>
     <label>Kje delaš</label>
     <div class="chips" id="rg"><button type="button" class="chip" data-k="vsa" aria-pressed="${sel.regije.has("vsa")}">Vsa Slovenija</button>${REGIJE.map(([k, n]) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${sel.regije.has(k)}">${n}</button>`).join("")}</div>
     <label class="check"><input type="checkbox" id="sog"${soglasje ? " checked" : ""}><span>Potrjujem, da dejavnost opravljam kot registriran samostojni podjetnik ali gospodarska družba, da imam potrebna dovoljenja in da sprejemam <a class="link" href="pogoji.html#mojstri">pogoje za mojstre</a>.</span></label>
