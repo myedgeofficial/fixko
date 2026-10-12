@@ -19,15 +19,9 @@ def call(method, path, **kw):
 app = call("GET", "/apps", params={"filter[bundleId]": os.environ["BUNDLE_ID"]}).json()["data"][0]
 print(f"::notice::Aplikacija {app['attributes']['name']} ({app['id']})")
 
-for b in call("GET", "/builds", params={"filter[app]": app["id"], "limit": 5, "sort": "-uploadedDate"}).json()["data"]:
-    a = b["attributes"]
-    print(f"::notice::Build {a['version']}: {a['processingState']}")
 
 ZUNANJI = os.environ.get("ZUNANJI") == "1"
 grupe = call("GET", f"/apps/{app['id']}/betaGroups").json()["data"]
-for g in grupe:
-    a = g["attributes"]
-    print(f"::notice::Skupina {a['name']}: internal={a.get('isInternalGroup')} javna povezava={a.get('publicLink')}")
 
 if not ZUNANJI:
     grupa = next((g for g in grupe if g["attributes"].get("isInternalGroup")), None)
@@ -49,8 +43,9 @@ else:
         "notes": "Fixko connects people who need home repairs with local tradespeople. Customer: tap 'Rabim mojstra', take a photo or describe the job, send. Tradesperson: tap 'Sem mojster', fill in the profile, tap 'Začni preizkus' (free trial), take a job and pick a time. No login needed."}}})
     print(f"::notice::Kontakt za pregled: {', '.join(kontakt) or 'MANJKA'}")
     feedback = kontakt.get("contactEmail", "")
-    opis = {"sl": "Fixko poveže ljudi, ki doma rabijo pomoč, z mojstri v bližini. Preizkusi: pošlji delo kot stranka ali ga prevzemi kot mojster.",
-            "en-US": "Fixko connects people who need help at home with nearby tradespeople. Try it: post a job as a customer or take one as a tradesperson."}
+    opis = {"en-US": "Fixko connects people who need help at home with nearby tradespeople. Try it: post a job as a customer or take one as a tradesperson.",
+            "sl-SI": "Fixko poveže ljudi, ki doma rabijo pomoč, z mojstri v bližini. Preizkusi: pošlji delo kot stranka ali ga prevzemi kot mojster.",
+}
     lok = call("GET", f"/apps/{app['id']}/betaAppLocalizations").json()["data"]
     imam = {l["attributes"]["locale"]: l["id"] for l in lok}
     for loc, txt in opis.items():
@@ -59,8 +54,9 @@ else:
         if loc in imam:
             call("PATCH", f"/betaAppLocalizations/{imam[loc]}", json={"data": {"type": "betaAppLocalizations", "id": imam[loc], "attributes": at}})
         else:
-            call("POST", "/betaAppLocalizations", json={"data": {"type": "betaAppLocalizations", "attributes": {"locale": loc, **at},
+            r = call("POST", "/betaAppLocalizations", json={"data": {"type": "betaAppLocalizations", "attributes": {"locale": loc, **at},
                  "relationships": {"app": {"data": {"type": "apps", "id": app["id"]}}}}})
+            print(f"::notice::Opis {loc}: {r.status_code}")
     grupa = next((g for g in grupe if not g["attributes"].get("isInternalGroup")), None)
     if not grupa:
         grupa = call("POST", "/betaGroups", json={"data": {"type": "betaGroups",
