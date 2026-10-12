@@ -29,3 +29,13 @@ test("pred", () => {
   assert.equal(pred(now - 30e3, now), "pravkar");
   assert.equal(pred(now - 10 * 60e3, now), "pred 10 min");
 });
+
+import { veljavnaDavcna } from "../src/data.js";
+test("davčna številka", () => {
+  // Kontrolna števka po modulu 11: 1234567 → vsota 8+14+18+20+20+18+14=112, 112 % 11 = 2, 11-2 = 9
+  assert.equal(veljavnaDavcna("12345679"), true);
+  assert.equal(veljavnaDavcna("SI 12345679"), true);
+  assert.equal(veljavnaDavcna("12345678"), false);
+  assert.equal(veljavnaDavcna("1234567"), false);
+  assert.equal(veljavnaDavcna("01234567"), false);
+});

@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { STROKE, REGIJE, KDAJ, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel } from "./data.js";
+import { STROKE, REGIJE, KDAJ, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, POGOJI_VERZIJA } from "./data.js";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 
 const FixkoPay = registerPlugin("FixkoPay");
@@ -136,7 +136,7 @@ function renderN() {
 
     <div class="err" id="err" hidden></div>
     <button class="btn big" type="submit" id="send">Pošlji mojstrom</button>
-    <p class="note">Mojster vas pokliče in se dogovori za termin. Za vas je Fixko brezplačen.</p>
+    <p class="note">Mojster vas pokliče in se dogovori za termin. Za vas je Fixko brezplačen. S pošiljanjem sprejemate <a class="link" href="pogoji.html">pogoje uporabe</a> in <a class="link" href="zasebnost.html">politiko zasebnosti</a>.</p>
   </form>
   ${S.myJobs.length ? `<h2>Moja naročila</h2><div class="list">${S.myJobs.map(cardN).join("")}</div>` : ""}`;
 
@@ -149,6 +149,7 @@ function renderN() {
   };
   view.querySelectorAll("[data-done]").forEach((b) => (b.onclick = () => setStatus(b.dataset.done, "opravljeno")));
   view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => setStatus(b.dataset.cancel, "preklicano")));
+  view.querySelectorAll("[data-prijavim]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavim, kdo: "mojster" })));
   osveziStroko(); osveziKraj();
   if (!prefs.kraj && !draft.urejamKraj && !draft.vprasal) { draft.vprasal = true; najdiLokacijo(true); }
 
@@ -228,9 +229,10 @@ function cardN(j) {
   let st;
   if (j.status === "opravljeno") st = `<div class="status"><span class="dot off"></span>Opravljeno</div>`;
   else if (j.status === "preklicano") st = `<div class="status"><span class="dot off"></span>Preklicano</div>`;
-  else if (j.status === "prevzeto") st = `<div class="status"><span class="dot ok"></span>${esc(j.mojsterIme || "Mojster")} pride ${esc(opisTermina(j.termin))}</div>
+  else if (j.status === "prevzeto") st = `<div class="status"><span class="dot ok"></span>Mojster pride ${esc(opisTermina(j.termin))}</div>
+    <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}</div></div>
     ${k.mojsterTel ? `<div class="row"><span class="phone">${esc(k.mojsterTel)}</span><a class="btn small" href="tel:${esc(k.mojsterTel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
-    <div class="row"><button class="btn small ghost" type="button" data-done="${j.id}">Delo je opravljeno</button></div>`;
+    <div class="row"><button class="btn small ghost" type="button" data-done="${j.id}">Delo je opravljeno</button><button class="link muted" type="button" data-prijavim="${j.id}">Prijavi mojstra</button></div>`;
   else st = `<div class="status"><span class="dot"></span>${j.obvesceni ? `Obvestili smo ${mojstrov(j.obvesceni)}, čakam ...` : "Čakam, da se oglasi mojster ..."}</div>
     <div class="row"><button class="link" type="button" data-cancel="${j.id}">Prekliči</button></div>`;
   return `<div class="job">${pic(j)}<div class="body"><span class="tag">${strokaIme(j.stroka)}</span><h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${st}</div></div>`;
@@ -254,9 +256,10 @@ function watchMine() {
 const aktiven = () => S.mojster?.narocninaDo && S.mojster.narocninaDo.toMillis() > Date.now();
 function renderM() {
   if (!db) { view.innerHTML = `<div class="empty">Del za mojstre bo deloval, ko bo Fixko povezan s strežnikom.</div>`; return; }
-  if (!S.mojster || S.urejam) return renderProfil();
+  if (!S.mojster || S.urejam || !profilPopoln(S.mojster)) return renderProfil();
   if (!aktiven()) return renderPaywall();
-  const prosta = S.feed.filter((j) => j.status === "odprto" && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));
+  const skrita = new Set(prefs.skrita || []);
+  const prosta = S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));
   view.innerHTML = `
   <div class="bar"><span>${(S.mojster.stroke || []).map(strokaIme).join(", ")} · ${(S.mojster.regije || []).map(regijaIme).join(", ")}</span><button class="link" id="edit" type="button">Uredi</button></div>
   ${S.taken.filter((j) => j.status === "prevzeto").length ? `<h2>Moja dela</h2><div class="list">${S.taken.filter((j) => j.status === "prevzeto").map(cardTaken).join("")}</div>` : ""}
@@ -264,12 +267,15 @@ function renderM() {
   <div class="list">${prosta.length ? prosta.map(cardM).join("") : `<div class="empty">Ta hip ni prostih del v tvoji stroki in regiji. Ko se kaj sprosti, dobiš obvestilo.</div>`}</div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
   view.querySelectorAll("[data-take]").forEach((b) => (b.onclick = () => takeSheet(prosta.find((j) => j.id === b.dataset.take))));
+  view.querySelectorAll("[data-prijavi]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavi, kdo: "objava" })));
 }
+const profilPopoln = (m) => !!(m && m.slika && m.firma && m.davcna && m.pogoji === POGOJI_VERZIJA);
 function cardM(j) {
   const nov = !S.seen.has(j.id) && j.ustvarjeno && Date.now() - j.ustvarjeno.toMillis() < 3600e3;
   return `<div class="job">${pic(j)}<div class="body"><span class="tag">${strokaIme(j.stroka)}</span>${nov ? '<span class="new">Novo</span>' : ""}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
     <div class="meta">${esc(j.kraj)} · ${esc(j.kdaj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>
-    <button class="btn" type="button" data-take="${j.id}" style="margin-top:12px">Prevzemi delo</button></div></div>`;
+    <button class="btn" type="button" data-take="${j.id}" style="margin-top:12px">Prevzemi delo</button>
+    <div class="row"><button class="link muted" type="button" data-prijavi="${j.id}">Prijavi ali skrij objavo</button></div></div></div>`;
 }
 function cardTaken(j) {
   const k = S.kontakti[j.id] || {};
@@ -279,43 +285,79 @@ function cardTaken(j) {
     ${k.tel ? `<div class="row"><span class="phone">${esc(k.tel)}</span><a class="btn small" href="tel:${esc(k.tel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}</div></div>`;
 }
 function renderProfil() {
-  const m = S.mojster || { stroke: [], regije: [] };
-  const sel = { stroke: new Set(m.stroke), regije: new Set(m.regije) };
+  // Osnutek obrazca ostane med ponovnimi izrisi (npr. ko pride posodobitev iz baze med tipkanjem).
+  if (!S.pd || (!S.pd.dotaknjen && S.pd.izvor !== S.mojster)) {
+    const m0 = S.mojster ? { ...S.mojster } : { stroke: [], regije: [] };
+    S.pd = { izvor: S.mojster, dotaknjen: false, m: m0, sel: { stroke: new Set(m0.stroke), regije: new Set(m0.regije) }, novaSlika: null, soglasje: m0.pogoji === POGOJI_VERZIJA };
+  }
+  const { m, sel } = S.pd;
   const draw = () => {
+    const novaSlika = S.pd.novaSlika, soglasje = S.pd.soglasje;
+    const slika = novaSlika?.url || m.slika;
     view.innerHTML = `
     <h1>${S.mojster ? "Tvoj profil" : "Dela pridejo k tebi"}</h1>
-    ${S.mojster ? "" : `<p class="lead">Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo s sliko. Prevzameš delo, izbereš termin in stranko pokličeš.</p>`}
-    <label for="ime">Ime ali podjetje</label>
-    <input id="ime" maxlength="60" placeholder="npr. Marko Kos, s.p." value="${esc(m.ime || prefs.ime)}">
+    ${S.mojster ? "" : `<p class="lead">Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo s sliko. Prevzameš delo, izbereš termin in stranko pokličeš. Stranka vidi tvojo sliko, ime in podjetje.</p>`}
+    <label class="avatar-up" for="pf">${slika ? `<img src="${esc(slika)}" alt="Tvoja slika">` : `<span>${kamera}</span>`}<div><b>${slika ? "Zamenjaj sliko" : "Dodaj svojo sliko"}</b><small>Obraz, da te stranka prepozna</small></div></label>
+    <input id="pf" type="file" accept="image/*" hidden>
+    <label for="ime">Ime in priimek</label>
+    <input id="ime" maxlength="60" placeholder="npr. Marko Kos" value="${esc(m.ime || prefs.ime)}" autocomplete="name">
+    <label for="firma">Podjetje</label>
+    <input id="firma" maxlength="80" placeholder="npr. Kos inštalacije, Marko Kos s.p." value="${esc(m.firma || "")}" autocomplete="organization">
+    <label for="davcna">Davčna številka podjetja</label>
+    <input id="davcna" inputmode="numeric" maxlength="12" placeholder="12345678" value="${esc(m.davcna || "")}">
     <label for="mtel">Telefon</label>
     <input id="mtel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(m.tel || "")}">
     <label>Tvoja stroka</label>
     <div class="chips" id="st">${STROKE.map(([k, n]) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${sel.stroke.has(k)}">${n}</button>`).join("")}</div>
     <label>Kje delaš</label>
     <div class="chips" id="rg"><button type="button" class="chip" data-k="vsa" aria-pressed="${sel.regije.has("vsa")}">Vsa Slovenija</button>${REGIJE.map(([k, n]) => `<button type="button" class="chip" data-k="${k}" aria-pressed="${sel.regije.has(k)}">${n}</button>`).join("")}</div>
+    <label class="check"><input type="checkbox" id="sog"${soglasje ? " checked" : ""}><span>Potrjujem, da dejavnost opravljam kot registriran samostojni podjetnik ali gospodarska družba, da imam potrebna dovoljenja in da sprejemam <a class="link" href="pogoji.html#mojstri">pogoje za mojstre</a>.</span></label>
     <div class="err" id="err" hidden></div>
     <button class="btn" type="button" id="save">${S.mojster ? "Shrani" : "Naprej"}</button>
     ${S.mojster ? `<button class="btn ghost" type="button" id="back">Nazaj</button>` : ""}`;
-    const keep = () => { m.ime = document.getElementById("ime").value; m.tel = document.getElementById("mtel").value; };
+    const keep = () => {
+      for (const [k, el] of [["ime", "ime"], ["firma", "firma"], ["davcna", "davcna"], ["tel", "mtel"]]) m[k] = document.getElementById(el).value;
+      S.pd.soglasje = document.getElementById("sog").checked;
+      S.pd.dotaknjen = true;
+    };
     view.querySelectorAll("#st .chip").forEach((b) => (b.onclick = () => { keep(); const k = b.dataset.k; sel.stroke.has(k) ? sel.stroke.delete(k) : sel.stroke.add(k); draw(); }));
     view.querySelectorAll("#rg .chip").forEach((b) => (b.onclick = () => { keep(); const k = b.dataset.k; sel.regije.has(k) ? sel.regije.delete(k) : sel.regije.add(k); draw(); }));
-    if (S.mojster) document.getElementById("back").onclick = () => { S.urejam = false; renderM(); };
+    document.getElementById("pf").onchange = (e) => {
+      const fl = e.target.files[0]; if (!fl) return; keep();
+      shrink(fl, 640).then((r) => { S.pd.novaSlika = r; draw(); }).catch(() => toast("Slike ni bilo mogoče odpreti", "Poskusi z drugo sliko."));
+    };
+    if (S.mojster) document.getElementById("back").onclick = () => { S.urejam = false; S.pd = null; renderM(); };
     document.getElementById("save").onclick = async () => {
       keep();
-      const err = (t) => { const el = document.getElementById("err"); el.textContent = t; el.hidden = false; };
-      if (!m.ime.trim()) return err("Vpiši ime ali podjetje.");
+      const { novaSlika, soglasje } = S.pd;
+      const err = (t) => { const el = document.getElementById("err"); el.textContent = t; el.hidden = false; el.scrollIntoView({ block: "center", behavior: "smooth" }); };
+      if (!novaSlika && !m.slika) return err("Dodaj svojo sliko. Stranke raje odprejo vrata nekomu, ki ga prepoznajo.");
+      if (m.ime.trim().split(/\s+/).length < 2) return err("Vpiši ime in priimek.");
+      if (m.firma.trim().length < 3) return err("Vpiši ime podjetja, kot je v poslovnem registru.");
+      if (!veljavnaDavcna(m.davcna)) return err("Davčna številka ni pravilna. Ima 8 števk, npr. 12345678.");
       if (!veljavenTel(m.tel)) return err("Vpiši telefonsko številko, npr. 041 123 456.");
       if (!sel.stroke.size) return err("Izberi vsaj eno stroko.");
       if (!sel.regije.size) return err("Izberi, kje delaš.");
-      const push = await enablePush();
+      if (!soglasje) return err("Za objavo profila potrdi pogoje za mojstre.");
+      const btn = document.getElementById("save"); btn.disabled = true; btn.textContent = "Shranjujem ...";
       try {
-        const data = { ime: m.ime.trim().slice(0, 60), tel: m.tel.trim(), stroke: [...sel.stroke], regije: [...sel.regije], posodobljeno: serverTimestamp() };
+        let slikaUrl = m.slika;
+        if (novaSlika) {
+          const r = ref(storage, `profil/${uid}/${Date.now()}.jpg`);
+          await uploadBytes(r, novaSlika.blob, { contentType: "image/jpeg" });
+          slikaUrl = await getDownloadURL(r);
+        }
+        const push = await enablePush();
+        const data = {
+          ime: m.ime.trim().replace(/\s+/g, " ").slice(0, 60), firma: m.firma.trim().replace(/\s+/g, " ").slice(0, 80), davcna: cistaDavcna(m.davcna),
+          slika: slikaUrl, tel: m.tel.trim(), stroke: [...sel.stroke], regije: [...sel.regije], pogoji: POGOJI_VERZIJA, posodobljeno: serverTimestamp()
+        };
         if (push) data.push = push;
         await setDoc(doc(db, "mojstri", uid), data, { merge: true });
         prefs.ime = data.ime; savePrefs();
-        S.urejam = false;
+        S.urejam = false; S.pd = null;
         if (!push) toast("Obvestila so izklopljena", "Vklopi jih v Nastavitvah iPhona, sicer ne izveš za nova dela.");
-      } catch (e) { console.error(e); err("Shranjevanje ni uspelo. Poskusi znova."); }
+      } catch (e) { console.error(e); btn.disabled = false; btn.textContent = "Shrani"; err("Shranjevanje ni uspelo. Poskusi znova."); }
     };
   };
   draw();
@@ -426,6 +468,27 @@ function watchMojster() {
   }, (e) => console.error("prevzeta dela", e)));
 }
 
+/* ---------- prijava neprimerne vsebine ---------- */
+// Apple zahteva, da lahko uporabnik prijavi neprimerno vsebino in jo skrije. Prijave pregledamo v 24 urah.
+const RAZLOGI = ["Lažna ali zavajajoča objava", "Žaljiva ali neprimerna vsebina", "Neprimerna slika", "Nadlegovanje ali goljufija", "Drugo"];
+function prijaviSheet({ delo, kdo }) {
+  const d = document.createElement("div"); d.className = "sheet";
+  d.innerHTML = `<div role="dialog" aria-label="Prijava"><h2 style="margin-top:0">${kdo === "mojster" ? "Prijavi mojstra" : "Prijavi objavo"}</h2>
+    <p class="lead">Zakaj? Prijavo pregledamo v 24 urah.${kdo === "objava" ? " Objava se ti takoj skrije." : ""}</p>
+    <div class="mreza" style="grid-template-columns:1fr">${RAZLOGI.map((r) => `<button type="button" class="chip" data-r="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+    <button class="btn ghost" type="button" id="x">Prekliči</button></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  d.querySelector("#x").onclick = () => d.remove();
+  d.querySelectorAll("[data-r]").forEach((b) => (b.onclick = async () => {
+    d.remove();
+    if (kdo === "objava") { prefs.skrita = [...new Set([...(prefs.skrita || []), delo])].slice(-200); savePrefs(); }
+    try { await setDoc(doc(collection(db, "prijave")), { delo, kdo, razlog: b.dataset.r, prijavil: uid, ustvarjeno: serverTimestamp() }); } catch (e) { console.error(e); }
+    toast("Hvala za prijavo", "Pregledali jo bomo v 24 urah.");
+    render();
+  }));
+}
+
 /* ---------- nastavitve ---------- */
 function settingsSheet() {
   const d = document.createElement("div"); d.className = "sheet";
@@ -464,12 +527,12 @@ function toast(t, m) {
   el.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><div><b>${esc(t)}</b>${esc(m)}</div>`;
   el.onclick = () => el.remove(); document.body.appendChild(el); clearTimeout(tt); tt = setTimeout(() => el.remove(), 4500);
 }
-function shrink(file) {
+function shrink(file, max = 1280) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const im = new Image();
     im.onload = () => {
-      const s = Math.min(1, 1280 / Math.max(im.width, im.height));
+      const s = Math.min(1, max / Math.max(im.width, im.height));
       const c = document.createElement("canvas"); c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
       c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
       c.toBlob((blob) => blob ? resolve({ blob, url: c.toDataURL("image/jpeg", 0.6) }) : reject(new Error("slika")), "image/jpeg", 0.8);

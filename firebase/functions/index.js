@@ -10,7 +10,7 @@ const admin = require("firebase-admin");
 const { Timestamp, FieldValue } = require("firebase-admin/firestore");
 const http2 = require("http2");
 const crypto = require("crypto");
-const { opisTermina, strokaIme } = require("./besedila");
+const { opisTermina, strokaIme, veljavnaDavcna } = require("./besedila");
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
@@ -86,10 +86,15 @@ exports.prevzemi = onCall(async (req) => {
   const { delo, kontakt, mojster } = await db.runTransaction(async (t) => {
     const [m, d, k] = await Promise.all([t.get(mRef), t.get(dRef), t.get(kRef)]);
     if (!m.exists || !(m.data().narocninaDo?.toMillis() > Date.now())) throw new HttpsError("permission-denied", "Naročnina ni aktivna.");
+    const md = m.data();
+    if (!md.slika || !md.firma || !veljavnaDavcna(md.davcna) || !md.pogoji) throw new HttpsError("failed-precondition", "Dopolni profil: slika, podjetje in davčna številka.");
     if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
     if (d.data().status !== "odprto") throw new HttpsError("already-exists", "Delo je že prevzeto.");
     if (d.data().lastnik === uid) throw new HttpsError("failed-precondition", "Svojega dela ne moreš prevzeti.");
-    t.update(dRef, { status: "prevzeto", mojster: uid, mojsterIme: m.data().ime, termin, prevzeto: FieldValue.serverTimestamp() });
+    t.update(dRef, {
+      status: "prevzeto", mojster: uid, mojsterIme: md.ime, mojsterFirma: md.firma, mojsterDavcna: md.davcna, mojsterSlika: md.slika,
+      termin, prevzeto: FieldValue.serverTimestamp()
+    });
     t.set(kRef, { mojsterTel: m.data().tel }, { merge: true });
     return { delo: d.data(), kontakt: k.exists ? k.data() : {}, mojster: m.data() };
   });
@@ -182,7 +187,9 @@ exports.izbrisi = onCall(async (req) => {
   // Prevzeta dela tega mojstra ostanejo strankam vidna, brez telefona mojstra.
   const prevzeta = await db.collection("dela").where("mojster", "==", uid).get();
   await Promise.all(prevzeta.docs.map((d) => d.ref.collection("zasebno").doc("kontakt").set({ mojsterTel: FieldValue.delete() }, { merge: true })));
+  await Promise.all(prevzeta.docs.map((d) => d.ref.update({ mojsterSlika: FieldValue.delete(), mojsterDavcna: FieldValue.delete() })));
   await admin.storage().bucket().deleteFiles({ prefix: "slike/" + uid + "/" }).catch((e) => console.warn("slike", e.message));
+  await admin.storage().bucket().deleteFiles({ prefix: "profil/" + uid + "/" }).catch((e) => console.warn("profil", e.message));
   await admin.auth().deleteUser(uid).catch(() => {});
   return { ok: true };
 });

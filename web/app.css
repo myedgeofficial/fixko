@@ -93,3 +93,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .err{color:var(--danger);font-weight:600;margin-top:14px;font-size:18px}
 .spin{display:grid;place-items:center;min-height:50vh;color:var(--muted)}
 @media (prefers-reduced-motion:no-preference){.toast{animation:drop .25s ease-out}@keyframes drop{from{transform:translate(-50%,-12px);opacity:0}}}
+.avatar-up{display:flex;align-items:center;gap:14px;background:var(--surface);border:1.5px dashed var(--accent);border-radius:16px;padding:14px;margin:6px 0 4px;color:var(--ink)}
+.avatar-up img,.avatar-up span{width:72px;height:72px;border-radius:50%;object-fit:cover;flex:none;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.avatar-up span svg{width:32px;height:32px}
+.avatar-up b{font-size:18px}
+.avatar-up small{display:block;color:var(--muted);font-size:15px;font-weight:400}
+.check{display:flex;gap:12px;align-items:flex-start;font-weight:400;font-size:16px;line-height:1.4;margin-top:22px}
+.check input{width:26px;height:26px;min-height:0;flex:none;margin:0;padding:0;appearance:auto;accent-color:var(--accent)}
+.mojster{display:flex;align-items:center;gap:12px;margin-top:12px;background:var(--accent-soft);border-radius:14px;padding:10px 12px}
+.mojster img{width:60px;height:60px;border-radius:50%;object-fit:cover;flex:none}
+.mojster b{display:block;font-size:18px}
+.mojster span{display:block;font-size:16px}
+.mojster small{display:block;color:var(--muted);font-size:14px}
+.link.muted{color:var(--muted);font-weight:500;font-size:15px}

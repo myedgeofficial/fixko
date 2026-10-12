@@ -58,3 +58,17 @@ export function veljavenTel(t) {
   const st = String(t || "").replace(/[^\d]/g, "");
   return /^[+\d][\d\s/-]*$/.test(String(t || "").trim()) && st.length >= 8 && st.length <= 15;
 }
+// Slovenska davčna številka: 8 števk, zadnja je kontrolna (modul 11, uteži 8..2). Sprejme tudi "SI 12345678".
+export function veljavnaDavcna(v) {
+  const s = String(v || "").toUpperCase().replace(/^SI/, "").replace(/\s/g, "");
+  if (!/^[1-9]\d{7}$/.test(s)) return false;
+  let vsota = 0;
+  for (let i = 0; i < 7; i++) vsota += Number(s[i]) * (8 - i);
+  let k = 11 - (vsota % 11);
+  if (k === 11) return false;
+  if (k === 10) k = 0;
+  return k === Number(s[7]);
+}
+export const cistaDavcna = (v) => String(v || "").toUpperCase().replace(/^SI/, "").replace(/\s/g, "");
+// Verzija pogojev, ki jih mojster sprejme (ob spremembi pogojev jo povečaj, da jih sprejme znova).
+export const POGOJI_VERZIJA = "2026-10-12";

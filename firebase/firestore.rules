@@ -12,6 +12,15 @@ service cloud.firestore {
     function besedilo(v, max) { return v is string && v.size() <= max; }
 
     // Ročni popravki stroke (opis brez osebnih podatkov) za izboljšanje prepoznave. Branje samo s strežnika.
+    // Prijave neprimernih objav in mojstrov. Branje samo s strežnika.
+    match /prijave/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['delo', 'kdo', 'razlog', 'prijavil', 'ustvarjeno'])
+        && besedilo(request.resource.data.delo, 40) && request.resource.data.kdo in ['objava', 'mojster']
+        && besedilo(request.resource.data.razlog, 60) && request.resource.data.prijavil == request.auth.uid
+        && request.resource.data.ustvarjeno == request.time;
+    }
+
     match /popravki/{id} {
       allow create: if request.auth != null
         && request.resource.data.keys().hasOnly(['opis', 'predlog', 'izbrano', 'ustvarjeno'])
@@ -54,16 +63,24 @@ service cloud.firestore {
       }
     }
 
+    // Profil mojstra: ime, podjetje, davčna (8 števk), slika iz naše shrambe, sprejeti pogoji.
+    function profil(d) {
+      return besedilo(d.ime, 60) && besedilo(d.tel, 20)
+        && (!('firma' in d) || besedilo(d.firma, 80))
+        && (!('davcna' in d) || (d.davcna is string && d.davcna.matches('[1-9][0-9]{7}')))
+        && (!('slika' in d) || (besedilo(d.slika, 600) && d.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*')))
+        && (!('pogoji' in d) || besedilo(d.pogoji, 20));
+    }
     match /mojstri/{uid} {
       allow read: if prijavljen() && request.auth.uid == uid;
       allow create: if prijavljen() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['ime', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
-        && besedilo(request.resource.data.ime, 60) && besedilo(request.resource.data.tel, 20)
+        && request.resource.data.keys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
+        && profil(request.resource.data)
         && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 12
         && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
       allow update: if prijavljen() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
-        && besedilo(request.resource.data.ime, 60) && besedilo(request.resource.data.tel, 20)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
+        && profil(request.resource.data)
         && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 12
         && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
       allow delete: if false;

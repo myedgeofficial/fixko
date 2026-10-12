@@ -20,4 +20,16 @@ function opisTermina(ms, now = Date.now()) {
   if (razlika > 1 && razlika < 7) return `${V_DAN[t.wd]} ob ${t.ura}`;
   return `${t.dt}. ${t.mes}. ob ${t.ura}`;
 }
-module.exports = { opisTermina, strokaIme };
+// Slovenska davčna številka: 8 števk, kontrolna števka po modulu 11 (enako kot v aplikaciji).
+function veljavnaDavcna(v) {
+  const s = String(v || "");
+  if (!/^[1-9]\d{7}$/.test(s)) return false;
+  let vsota = 0;
+  for (let i = 0; i < 7; i++) vsota += Number(s[i]) * (8 - i);
+  let k = 11 - (vsota % 11);
+  if (k === 11) return false;
+  if (k === 10) k = 0;
+  return k === Number(s[7]);
+}
+
+module.exports = { opisTermina, strokaIme, veljavnaDavcna };
