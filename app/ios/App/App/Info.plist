@@ -32,6 +32,10 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Fixko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Fixko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Fixko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
 	<key>NSCameraUsageDescription</key>
