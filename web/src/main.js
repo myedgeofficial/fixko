@@ -178,6 +178,11 @@ function renderN() {
         lastnik: uid, stroka: draft.cat, opis: draft.opis.trim().slice(0, 200), regija: prefs.regija, kraj: prefs.kraj.trim().slice(0, 80),
         kdaj: KDAJ[0], slika, status: "odprto", ustvarjeno: serverTimestamp()
       });
+      // Učenje: če je stranka stroko izbrala sama, shranimo opis in izbiro (brez osebnih podatkov).
+      const predlog = prepoznajStroko(draft.opis);
+      if (draft.opis.trim() && predlog !== draft.cat) {
+        setDoc(doc(collection(db, "popravki")), { opis: draft.opis.trim().slice(0, 200), predlog, izbrano: draft.cat, ustvarjeno: serverTimestamp() }).catch(() => {});
+      }
       draft = { cat: "", photo: null, blob: null, opis: "", vprasal: true };
       renderN();
       toast("Poslano mojstrom", "Ko se mojster oglasi, vas pokliče. Tukaj vidite, kdo pride in kdaj.");

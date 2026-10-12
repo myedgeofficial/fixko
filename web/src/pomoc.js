@@ -3,33 +3,95 @@
 
 export const brezSumnikov = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-// Začetki besed (brez šumnikov) po strokah. Besedna zveza šteje dvojno.
-const KLJUCI = {
-  vodovod: ["pip", "odtok", "wc", "stranis", "skoljk", "kotlick", "umival", "tus", "kad", "korit", "cev", "pusc", "puscanj", "kaplj", "vod", "vodovod", "bojler", "sifon", "zamas", "ventil", "splakov", "kanalizacij", "pomivaln"],
-  elektrika: ["elektr", "vticnic", "stikal", "luc", "lucka", "zarnic", "varovalk", "kabl", "kabel", "tok", "napeljav", "lestenec", "svetil", "kratek stik", "stik", "pecic", "stedilnik", "elektricar", "omaric", "fi stikal", "luci"],
-  keramika: ["ploscic", "keramik", "fug", "fugir", "polaganj ploscic"],
-  pleskanje: ["plesk", "barv", "belj", "belit", "prepleska", "oplesk", "plesen", "tapet", "fasad", "stena", "sten", "strop", "razpok", "omet"],
-  mizarstvo: ["mizar", "vrat", "okn", "omar", "parket", "laminat", "stopnic", "predal", "tecaj", "kljuk", "les", "lesen", "polic", "rolet", "zaluzij", "polkn"],
-  montaza: ["sestav", "montaz", "ike", "pohistv", "televizor", "tv", "karnis", "zaves", "postelj", "kuhinj", "obes", "pritrd", "zloz"],
-  ogrevanje: ["ogrev", "radiator", "pec", "kotel", "klim", "toplotn", "crpalk", "mrzl", "hladn", "gretj", "gret", "talno", "plin", "termostat", "kurjav"],
-  streha: ["streh", "zleb", "opek", "krov", "zamak", "stresn", "dimnik", "kritin", "snegolov"],
-  vrt: ["vrt", "trav", "kosit", "kosnj", "drev", "ziv mej", "ziva mej", "grm", "obrez", "plevel", "listj", "tlakovc", "ograj", "sneg", "zivic"],
-  ciscenje: ["cisc", "pocist", "ocist", "pomit okn", "umit okn", "pomiv okn", "prah", "generaln", "preprog", "pospravi", "pospravlj", "sesanj"],
-  selitve: ["selit", "selitev", "preselit", "prevoz", "prenes", "odvoz", "kosovn", "odpad", "klavir", "prepelj", "kombi"]
+// Besede po strokah (brez šumnikov, male črke). Pravila zapisa:
+//   pip      začetek besede (pipa, pipe, pipo ...), 1 točka
+//   pip!     močan znak za to stroko, 2 točki
+//   mizar!!  ime mojstra, 4 točke (»rabim varilca za vrata« → varilec)
+//   tok$     cela beseda (ne "tokrat")
+//   pomit_okn  besedna zveza (pomiti okna), 3 točke
+// Vključeni so knjižni, pogovorni in narečni izrazi (štajerski, gorenjski, primorski, prekmurski, dolenjski).
+const BESEDE = {
+  vodovod: `odtek! odteka! ne_odteka pip! pipc! armatur! mesaln! baterij spin! rubinet! slavin! odtok! odtocn! sifon! zamas! zamaš zacep! zacepl! nabasa
+    pusc! puscanj! puca$! pucajo$! pucalo$ pusti$ curi! cur! curlja! curk kaplj! kapa$ kaplje$ mokr poplav! poplavl! pocil poci$ poknil pokla$ pokn
+    cev cevi$ cevk rur! ror! flah slauf! crev vodovod! vodovodar!! vodoinstal! instalater!! vodar! voda$ vode$ vodo$ vodi$ vodomer! ventil! hauptn
+    wc! skoljk! stranisc! stranis! klozet! kloz! hasl! hajzl! sekret! splak! splakov! spul! spula! spulat! kotlic! kotlick! kotlicek! kotlic
+    umival! umivaln! lavabo! lavandin! lavor! korit! pomivaln_korit tus! tusk! tus_kabin tuskabin! kad$! kadi$! kadjo$ banj! jacuzz
+    bojler! grelnik_vod grelec_vod topla_voda$ tople_vode$ ni_tople ni_vode kanaliz! jasek! greznic! fekal! odplak! smrdi_iz_odtok
+    pralni_stroj_prikljuc prikljucek_za_pralni vodni_kamen filter_za_vod`,
+  elektrika: `pecica_ne pecica_ne_greje elektr! elektrik! elektricar!! elektrikar!! elektro! struj! tok$! toka$! tokom$ elektrike$! ni_elektrike ni_toka vticnic! vticnc! stekdoz! steker! stekr!
+    stikal! stikalo! salter! salterj! luc! luci$! lucka! lucke! lampa! lamp! luster! lestenec! lestenc! svetil! svetilk! reflektor led_trak led_luc zarnic! birn! birna!
+    varovalk! varovalka! fi_stikal fid! pada_varovalk pade_varovalk izbija! izbije! kratek_stik! stik iskri! iskr! smrdi_po_zgan kabel! kabl! zic! drot! napeljav! elektroinstal!
+    domofon! zvonec! zvonc! pecica! pecic! stedilnik! sporhet! indukcij! kuhalna_plosc napa$ nape$ ventilator! hladilnik! zamrzoval! pomivaln_stroj pralni susiln!
+    polniln! polnilnic! soncn_elektrarn solarn_elektrarn elektrarn! antena! anten! satelit! internet wifi omaric razdelil! stevec! merilni_mest
+    ne_dela_luc ni_luci ne_sveti! zatemn rolete_na_motor`,
+  keramika: `silikon_okoli silikon_ob_kad silikon_v_kopalnic ploscic! ploscice! plosc! pločic ploc! fliz! flize! flise! fliesn keramik! keramicar!! fug! fugir! fugiran! silikon! silikonir! mozaik! kamnit_tla marmor! granit!
+    estrih! izravnav tlakovanj_kopalnic poloz_ploscic polaganj obloz! obloga! obkladanj kopalnico_obnov prenov_kopalnic obnov_kopalnic adaptacij_kopalnic`,
+  pleskanje: `plesk! pleskar!! pleskat! prepleska! oplesk! pobarv! barv! farb! farbat! farbal! malar!! malat! malal! molar! belj! belit! pobelit! prebelit! krec! kreč apnen
+    stena$ stene$ steno$ sten stenah strop! stropa! plesen! plesn! vlag vlazn madez madez! razpok! razpoke! omet! ometa! glet! gletanj! gletat! spahtl! spahtlat! kitanj! kitat!
+    tapet! tapeciranj fasad! fasada! fasaderst termofasad lakir! lakiranj! premaz! zascit_les impregnacij`,
+  mizarstvo: `okensk! okenska_polic mizar!! mizarj! tisler!! tislar!! tislerj! vrat! vrata$! vratc! kljuk! kljucavnic! kljucavn! cilinder! tecaj! tecaji! sarnir! sarnirj! sarnirji
+    okn! okno$! okna$! oknu$ polkn! rolet! rolo$ zaluzij! komarnik! mrezic_proti_komarj omar! omaric kredenc! predal! predali! parket! laminat! pod_skrip skrip! skripa! skripaj!
+    lesen! lesa$ les$ desk! stopnic! stopnisc! ograja_na_stopnic pult! kuhinjsk_pult miz! mize$ stol! stoli$ postelj zatika! zatakn! se_ne_zapir! ne_zapira! ne_zapre! ne_zaprejo!
+    se_ne_odpre! ne_odpre! zabojn lesn_ograj nadstresn_les brunar`,
+  montaza: `pritrd_omar obes_omar pritrd_omaric sestav! sestavit! sestavlj! zloz! zlozit! montaz! montir! montirat! monter!! ike! jysk! lesnina! harvey! mebl! mebel! pohistv! garnitur! sedezn! omaro_sestav sestav_omar
+    televizor! televizij! tv! tv_na_sten na_steno! obesit! obesi! obesil! obes! pritrdit! pritrd! privijac! privit! sraufat! sraufa! zasraufat! luknjo_zvrtat zvrtat! vrtat! vrtanj!
+    zaves! zavese! karnis! garnis! garnisn! polic! police$! slika_na_sten ogledal! kuhinj! kuhinjo_sestav vgradn! nosilec! drzal! obesalnik! kljukic`,
+  ogrevanje: `montaz_klim montir_klim namestit_klim nova_klim klimo_montir servis_klim ogrev! ogrevanj! gretj! gret! greje! ne_greje! ne_greja ni_gretja radiator! radiatorj! kalorifer! kaloriferj! rebrn grelec! grelnik! grelna
+    pec$! peci$! pecjo$ kmecka_pec kamin! kaminsk! kotel! kotla$! kotlu$ kotlovnic! kurisc! kurjav! kurilnic! kurit! centraln! centralna! plin! plinsk! plinski_kotel serviser_plin
+    toplotn! toplotna_crpalk crpalk! klima! klim! klimat! klimatsk! split hladi! ne_hladi! hladilni_plin freon! mrzl! mrzel! mrzlo! hladn! zmrzuj zebe! zebe$
+    talno! talnega! termostat! luft! zrak_v_radiator odzracit! odzracevanj! pelet! peletk! drva$ sekanc solarn! solarni_kolektor sonc_kolektor dimn_tuljav`,
+  streha: `nevihta! nevihti! neurj! streh_pusc streh_puca streh_tec streh_zamak streh_cur rina_zamas rine_zamas zleb_zamas zlebov_zamas dez! dezj! dezuje! ko_dez velux_okn streh! streha$! strehe$! strehi$! streho$! stresn! strešn ostresj! podstres zleb! zlebov! zlebi! rina$! rine$! rino$! rinah! rinn odtocn_cev_s_streh vertikal
+    opek! opeka! crep! korc! kupe$ salonit! lepenk! bitumen! kritin! krov! krovec!! krovsk! klepar!! kleparsk! plocevin! zamaka! zamak! zamakanj! pusca_streh tece_skozi_streh
+    curi_s_strop curi_iz_strop kaplja_s_strop dimnik! dimnika$ dimnikar!! obrob! snegolov! velux! stresno_okn stresna_okn tram! tramov! sleme! slemen! odnesl_veter veter_odnesel toca! toča`,
+  vrt: `oreh! jablan! hrusk! cesnj! slive$ smrek! bor$ breza! brezo$ lipa$ lipo$ hrast! tuje$! tujo$ oljk! figo$ suho_drev suh_drev vrt! vrtnar!! vrtnarsk! vrtu$ vrta$ trav! travnik! trata! kosit! pokosit! pokos! kosnj! kosilnic! kosilnik! ktos fura_trave trimer! frez! drev! drevo$ drevje! sadn! sadovnjak!
+    obrez! obrezat! obrezovanj! rezat_drev rezanj_drev posek! posekat! podret_drev podrl_drev zaga_drev ziva_mej ziv_mej zivic! zivo_mejo grm! grmovj! plevel! pleve! puliti_plevel
+    listj! listje$! grabit! grabljenj! tlakov! tlakovc! kocke$ dvorisc! dvoris ograj! plot! plota$ sneg! snega$! kidat! kidanj! kidal! zemlj! humus! nasut! nasip namakal!
+    zalivan! zalivanj! trta$ trte$ trto$ vinograd! vinogradnik bazen! uta$! ute$ vrtna_uta rastlin! cvetlic! gredic! gred$`,
+  ciscenje: `umazan! okn_umazan zamazan! po_selitv po_preselitv cisc! ciscenj! cistil! ocist! ocistit! pocist! pocistit! cist$ cisto$ pucat! spucat! pucan! pucanj! pucal! pospravit! pospravi! pospravlj! pomit_okn umit_okn pomiv_okn
+    okna_pomit okna_umit pomij! posesat! sesat! sesanj! sesal prah! prahu$ generaln! generalk! preprog! tepih! tepihe sedezne_garnitur_ocist kemicn_ciscenj globinsk!
+    po_gradnj po_obnov gradbenem_prahu steklo_ocist cistilk!! cistilni! cistilec! cistilni_servis pranje_fasad visokotlacn! kercher! karcher! dezinfekcij! razkuz! moljc stenice$ scurk`,
+  selitve: `znest! znesti! nadstrop selit! selitev! selitv! preselit! preseliti! selim! selimo! selil! preseljevanj! prevoz! prepelj! prepeljat! prenes! prenest! prenos! nosit! znosit! odnesti! odnest!
+    odvoz! odpelj! odpeljat! kosovn! kosovni_odpad odpad! smeti! sut! odvoz_sut klavir! kombi! tovornjak! kamion! spraznit! izprazn! izpraznit! praznjenj podstresj_izprazn
+    klet_izprazn stanovanje_izprazn hladilnik_prenest omaro_prenest stvari_prepelj pomoc_pri_selitv cuzat cucat`,
+  drugo: `podira! podrl! zid_podir varil! varilc!! porus_sten rusit_sten podret_sten varit_ograj zvarit! hisnik!! hisnisk! popravil razna_popravil manjsa_popravil malenkost zidar!! zidat! zidan! zid$ zidu$ beton! betonir! betonaz! porus! rusit! rusenj! podret! adaptacij obnov! prenov!
+    ograj_varit varit! varilec!! kovinsk! kljucavnicar!! steklar!! steklo! stekl! razbit_stekl alarm! kamer! videonadzor! garazn_vrat motor_za_vrat dvigaln! dvigalo! oglje gradbin! gradbenik`
 };
 
-// "pomit okn" ujame "pomiti okna": vsaka beseda je začetek besede.
-const vzorci = new Map();
-const VZOREC = (c) => vzorci.get(c) || vzorci.set(c, new RegExp(" " + c.split(" ").join("[a-z0-9]* "))).get(c);
+// Vsaka beseda šteje enkrat (najmočnejše ujemanje), besedne zveze dodatno po 5 točk.
+// Med besedami zveze sta lahko največ dve drugi besedi ("rina je zamašena").
+const DELI = Object.entries(BESEDE).map(([k, niz]) => {
+  const besede = [], zveze = [];
+  for (let v of brezSumnikov(niz).split(/\s+/).filter(Boolean)) {
+    const tock = v.endsWith("!!") ? 4 : v.endsWith("!") ? 2 : 1; v = v.replace(/!+$/, "");
+    const cela = v.endsWith("$"); v = v.replace(/\$$/, "");
+    const deli = v.split("_");
+    if (deli.length === 1) besede.push({ w: v, cela, tock });
+    else zveze.push(new RegExp(" " + deli.map((w, i) => w + (i === deli.length - 1 ? (cela ? " " : "[a-z0-9]* ") : "[a-z0-9]* (?:[a-z0-9]+ ){0,2}")).join("")));
+  }
+  return [k, besede, zveze];
+});
+
+const PREDPONE = ["pre", "po", "za", "na", "pri", "raz", "iz", "od", "pod", "s", "z", "o", "u", "v"];
 
 // Vrne ključ stroke ali "" če ne prepozna.
 export function prepoznajStroko(besedilo) {
-  const t = " " + brezSumnikov(besedilo).replace(/[^a-z0-9]+/g, " ") + " ";
-  if (t.trim().length < 2) return "";
+  const cisto = brezSumnikov(besedilo).replace(/[^a-z0-9]+/g, " ").trim();
+  if (cisto.length < 2) return "";
+  const t = " " + cisto + " ", slova = cisto.split(" ");
   let naj = "", najTock = 0;
-  for (const [k, seznam] of Object.entries(KLJUCI)) {
+  for (const [k, besede, zveze] of DELI) {
     let tock = 0;
-    for (const c of seznam) if (VZOREC(c).test(t)) tock += c.includes(" ") ? 2 : 1;
+    for (const sl of slova) {
+      // Tudi glagoli s predpono: prefarbat, zasraufat, odzracit ... ujamejo osnovo (farb, sraufat, zrac).
+      const brez = PREDPONE.map((p) => (sl.startsWith(p) && sl.length - p.length >= 4 ? sl.slice(p.length) : "")).filter(Boolean);
+      let m = 0;
+      for (const b of besede) {
+        if (b.tock <= m) continue;
+        if (b.cela ? sl === b.w : sl.startsWith(b.w) || (b.w.length >= 4 && brez.some((x) => x.startsWith(b.w)))) m = b.tock;
+      }
+      tock += m;
+    }
+    for (const re of zveze) if (re.test(t)) tock += 5;
     if (tock > najTock) { naj = k; najTock = tock; }
   }
   return naj;

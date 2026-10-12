@@ -11,6 +11,14 @@ service cloud.firestore {
     }
     function besedilo(v, max) { return v is string && v.size() <= max; }
 
+    // Ročni popravki stroke (opis brez osebnih podatkov) za izboljšanje prepoznave. Branje samo s strežnika.
+    match /popravki/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['opis', 'predlog', 'izbrano', 'ustvarjeno'])
+        && besedilo(request.resource.data.opis, 200) && besedilo(request.resource.data.predlog, 20)
+        && besedilo(request.resource.data.izbrano, 20) && request.resource.data.ustvarjeno == request.time;
+    }
+
     match /dela/{id} {
       allow read: if prijavljen() && (
         resource.data.lastnik == request.auth.uid
