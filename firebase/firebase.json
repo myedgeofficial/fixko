@@ -30,5 +30,13 @@
       "enabled": false
     },
     "singleProjectMode": true
+  },
+  "hosting": {
+    "public": "stran",
+    "cleanUrls": true,
+    "ignore": [
+      "firebase.json",
+      "**/.*"
+    ]
   }
 }

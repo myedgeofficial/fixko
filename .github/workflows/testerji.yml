@@ -9,6 +9,9 @@ on:
       emails:
         description: "E-pošte, ločene z vejico"
         default: "teo.simonic7@gmail.com"
+      zunanji:
+        description: "1 = zunanji testerji (Applov pregled, javna povezava)"
+        default: "0"
 
 jobs:
   testerji:
@@ -23,3 +26,5 @@ jobs:
           KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
           BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
           EMAILS: ${{ inputs.emails || 'teo.simonic7@gmail.com' }}
+          ZUNANJI: ${{ inputs.zunanji || '0' }}
+          ZASEBNOST_URL: https://fixko-app.web.app/zasebnost
