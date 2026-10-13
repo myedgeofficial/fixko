@@ -27,6 +27,12 @@ window.fixkoNazaj = () => {
   return false;
 };
 const view = document.getElementById("view");
+// Vsako okno dobi zgoraj gumb ✕, da ni treba drsati do gumba na dnu.
+new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+  if (!n.classList?.contains("sheet")) return;
+  const dodaj = () => { const d = n.firstElementChild; if (d && !d.querySelector(":scope > .zapri")) { const x = document.createElement("button"); x.type = "button"; x.className = "zapri"; x.setAttribute("aria-label", "Zapri"); x.textContent = "✕"; x.onclick = () => n.remove(); d.prepend(x); } };
+  dodaj(); new MutationObserver(dodaj).observe(n, { childList: true });
+}))).observe(document.body, { childList: true });
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 /* ---------- lokalne nastavitve (vloga, zadnji kraj in telefon) ---------- */
@@ -429,11 +435,24 @@ function renderM() {
   const moja = S.taken.filter((j) => j.status === "prevzeto");
   // Kot Instagram: zgoraj krogci z mojimi termini, spodaj objave prostih del.
   view.innerHTML = `
-  ${moja.length ? `<div class="zgodbe" aria-label="Moji termini">${moja.map((j) => `<button type="button" class="zgodba" data-odpri="T:${j.id}"><span class="kr">${j.slika ? `<img src="${esc(j.slika)}" alt="">` : ikona(j.stroka, 30)}</span><small>${esc(opisTermina(j.termin))}</small></button>`).join("")}</div>` : ""}
-  <div class="bar"><span>${(S.mojster.stroke || []).map(strokaIme).join(", ")} · ${(S.mojster.regije || []).map(regijaIme).join(", ")}</span><button class="link" id="edit" type="button">Uredi</button></div>
+  ${profilKartica(S.mojster, moja.length)}
+  ${moja.length ? `<h2 class="mali">Moji termini</h2><div class="zgodbe" aria-label="Moji termini">${moja.map((j) => `<button type="button" class="zgodba" data-odpri="T:${j.id}"><span class="kr">${j.slika ? `<img src="${esc(j.slika)}" alt="">` : ikona(j.stroka, 30)}</span><small>${esc(opisTermina(j.termin))}</small></button>`).join("")}</div>` : ""}
+  <h2 class="mali">Prosta dela</h2>
   <div class="feed">${prosta.length ? prosta.map(postM).join("") : `<div class="empty">${ikona("orodje", 40, 1.5)}<b>Trenutno ni prostih del</b>Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo.</div>`}</div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
   vezi(view); osveziDet();
+}
+// Moj profil na vrhu strani mojstra: slika, ime, podjetje, stroke in kje dela.
+function profilKartica(m, terminov) {
+  const reg = (m.regije || []).includes("vsa") ? "Vsa Slovenija" : (m.regije || []).map(regijaIme).join(", ");
+  return `<section class="profil">
+    <div class="pv">${m.slika ? `<img src="${esc(m.slika)}" alt="">` : `<span>${ikona("mojster", 34)}</span>`}
+      <div><b>${esc(m.ime || "Mojster")}</b><span>${esc(m.firma || "")}</span>${m.davcna ? `<small>Davčna ${esc(m.davcna)}</small>` : ""}</div>
+      <button class="uredi" id="edit" type="button">Uredi</button></div>
+    <div class="ps">${(m.stroke || []).map((k) => `<span>${ikona(k, 18, 2)}${esc(strokaIme(k))}</span>`).join("")}</div>
+    <div class="pr">${ikona("pin", 18, 2)}<span>${esc(reg)}</span></div>
+    <div class="pst"><div><b>${prostaDela().length}</b><small>prostih del</small></div><div><b>${terminov}</b><small>${terminov === 1 ? "termin" : terminov === 2 ? "termina" : terminov === 3 || terminov === 4 ? "termini" : "terminov"}</small></div><div><b>${Object.values(S.moje).filter((p) => p.status === "caka").length}</b><small>čaka na stranko</small></div></div>
+  </section>`;
 }
 const prostaDela = () => {
   const skrita = new Set(prefs.skrita || []);
@@ -576,6 +595,7 @@ function renderProfil() {
     const novaSlika = S.pd.novaSlika, soglasje = S.pd.soglasje;
     const slika = novaSlika?.url || m.slika;
     view.innerHTML = `
+    ${S.mojster ? `<div class="wiz"><button class="link" type="button" id="back0">‹ Nazaj</button></div>` : ""}
     <h1>${S.mojster ? "Tvoj profil" : "Dela pridejo k tebi"}</h1>
     ${S.mojster ? "" : `<p class="lead">Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo s sliko. Prevzameš delo, izbereš termin in stranko pokličeš. Stranka vidi tvojo sliko, ime in podjetje.</p>`}
     <label class="avatar-up" for="pf">${slika ? `<img src="${esc(slika)}" alt="Tvoja slika">` : `<span>${kamera}</span>`}<div><b>${slika ? "Zamenjaj sliko" : "Dodaj svojo sliko"}</b><small>Obraz, da te stranka prepozna</small></div></label>
@@ -607,7 +627,7 @@ function renderProfil() {
       const fl = e.target.files[0]; if (!fl) return; keep();
       shrink(fl, 640).then((r) => { S.pd.novaSlika = r; draw(); }).catch(() => toast("Slike ni bilo mogoče odpreti", "Poskusi z drugo sliko."));
     };
-    if (S.mojster) document.getElementById("back").onclick = () => { S.urejam = false; S.pd = null; renderM(); };
+    if (S.mojster) for (const id of ["back", "back0"]) document.getElementById(id).onclick = () => { S.urejam = false; S.pd = null; renderM(); window.scrollTo(0, 0); };
     document.getElementById("save").onclick = async () => {
       keep();
       const { novaSlika, soglasje } = S.pd;
