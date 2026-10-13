@@ -21,7 +21,7 @@ const BUNDLE_ID = process.env.APNS_TOPIC || "si.fixko.app";
 const PRODUCT_ID = process.env.PRODUCT_ID || "si.fixko.app.mojster.mesecno";
 const PREIZKUS_DNI = 30;
 
-/* ---------- obvestila (APNs) ---------- */
+/* ---------- obvestila (APNs, FCM) ---------- */
 function apnsJwt() {
   const header = Buffer.from(JSON.stringify({ alg: "ES256", kid: process.env.APNS_KEY_ID })).toString("base64url");
   const claims = Buffer.from(JSON.stringify({ iss: process.env.APPLE_TEAM_ID, iat: Math.floor(Date.now() / 1000) })).toString("base64url");
@@ -29,9 +29,31 @@ function apnsJwt() {
   const sig = crypto.sign("sha256", Buffer.from(header + "." + claims), { key, dsaEncoding: "ieee-p1363" }).toString("base64url");
   return header + "." + claims + "." + sig;
 }
-// TestFlight in App Store gradnje imajo produkcijske žetone; za Xcode gradnje bi rabili sandbox.
-function sendApns(tokens, title, body, data = {}) {
+// iPhone žetoni (64 hex znakov) gredo na APNs, Android žetoni na Firebase Cloud Messaging.
+// Rezultat: [{ token, status }], status 410 = žeton ne velja več (pobrišemo ga).
+const jeApns = (t) => /^[0-9a-f]{64}$/i.test(t);
+async function sendApns(tokens, title, body, data = {}) {
   tokens = [...new Set(tokens.filter(Boolean))];
+  const [a, f] = await Promise.all([apns(tokens.filter(jeApns), title, body, data), fcm(tokens.filter((t) => !jeApns(t)), title, body, data)]);
+  return [...a, ...f];
+}
+async function fcm(tokens, title, body, data) {
+  if (!tokens.length) return [];
+  const strData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
+  try {
+    const r = await admin.messaging().sendEachForMulticast({
+      tokens, notification: { title, body }, data: strData,
+      android: { priority: "high", notification: { sound: "default", channelId: "fixko" } }
+    });
+    return r.responses.map((x, i) => ({
+      token: tokens[i],
+      status: x.success ? 200 : /registration-token-not-registered|invalid-registration-token/.test(x.error?.code || "") ? 410 : 500,
+      data: x.success ? "" : String(x.error?.code || "")
+    }));
+  } catch (e) { console.error("fcm", e); return tokens.map((token) => ({ token, status: 0, data: String(e) })); }
+}
+// TestFlight in App Store gradnje imajo produkcijske žetone; za Xcode gradnje bi rabili sandbox.
+function apns(tokens, title, body, data = {}) {
   if (!tokens.length || !process.env.APNS_KEY_P8) return Promise.resolve([]);
   const jwt = apnsJwt();
   const client = http2.connect("https://api.push.apple.com");

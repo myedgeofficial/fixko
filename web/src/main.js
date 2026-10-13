@@ -17,6 +17,15 @@ import { ikona } from "./ikone.js";
 const FixkoPay = registerPlugin("FixkoPay");
 const FixkoKoledar = registerPlugin("FixkoKoledar");
 const native = Capacitor.isNativePlatform();
+const ios = Capacitor.getPlatform() === "ios";
+const android = Capacitor.getPlatform() === "android";
+// Android: tipka Nazaj najprej zapre odprto okno, nato gre nazaj po straneh (kliče MainActivity).
+window.fixkoNazaj = () => {
+  const sheets = document.querySelectorAll(".sheet");
+  if (sheets.length) { sheets[sheets.length - 1].remove(); return true; }
+  if (!/index\.html$|\/$/.test(location.pathname)) { history.back(); return true; }
+  return false;
+};
 const view = document.getElementById("view");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -58,11 +67,14 @@ const unsub = [];
 let pushToken = null;
 async function enablePush() {
   if (!native) return null;
+  // Android brez Firebase nastavitev (google-services.json) bi se ob prijavi za obvestila zrušil.
+  if (android && !window.FIXKO_PUSH) return null;
   try {
     let p = await PushNotifications.checkPermissions();
     if (p.receive === "prompt" || p.receive === "prompt-with-rationale") p = await PushNotifications.requestPermissions();
     if (p.receive !== "granted") return null;
     if (pushToken) return pushToken;
+    if (android) await PushNotifications.createChannel({ id: "fixko", name: "Nova dela in termini", importance: 5, visibility: 1, vibration: true }).catch(() => {});
     return await new Promise((resolve) => {
       const t = setTimeout(() => resolve(null), 10000);
       PushNotifications.addListener("registration", (r) => { clearTimeout(t); pushToken = r.value; resolve(r.value); });
@@ -458,6 +470,7 @@ async function vKoledar(j, vloga) {
   if (!native) return toast("Samo v aplikaciji", "Koledar deluje v aplikaciji na iPhonu.");
   try {
     const r = await FixkoKoledar.dodaj({ naslov, opis, kraj: j.kraj || "", zacetek: j.termin });
+    if (r.odprto) return toast("Shranite termin", "Odprl se je koledar. Tapnite Shrani.");
     if (r.koledar || r.opomnik) toast("Dodano", [r.koledar ? "v koledar" : "", r.opomnik ? "v opomnike" : ""].filter(Boolean).join(" in ") + ". Opozorilo dobite uro prej.");
     else toast("Ni dovoljenja", "Dovolite dostop v Nastavitve > Fixko > Koledarji in Opomniki.");
   } catch (e) { toast("Ni uspelo", "Termina ni bilo mogoče dodati."); }
@@ -535,14 +548,14 @@ function renderProfil() {
         await setDoc(doc(db, "mojstri", uid), data, { merge: true });
         prefs.ime = data.ime; savePrefs();
         S.urejam = false; S.pd = null;
-        if (!push) toast("Obvestila so izklopljena", "Vklopi jih v Nastavitvah iPhona, sicer ne izveš za nova dela.");
+        if (!push) toast("Obvestila so izklopljena", "Vklopi jih v nastavitvah telefona, sicer ne izveš za nova dela.");
       } catch (e) { console.error(e); btn.disabled = false; btn.textContent = "Shrani"; err("Shranjevanje ni uspelo. Poskusi znova."); }
     };
   };
   draw();
 }
 async function payStatus() {
-  if (!native) return { product: false };
+  if (!ios) return { product: false };
   try { return await FixkoPay.status(); } catch (e) { return { product: false }; }
 }
 async function sendJws(s) {
@@ -561,8 +574,8 @@ function renderPaywall() {
     <ul><li>Obvestila o novih delih s sliko</li><li>Termin potrdiš z enim klikom</li><li>Direkten telefon stranke</li><li>Brez provizije in brez plačila na delo</li></ul>
     <div class="err" id="err" hidden></div>
     <button class="btn" id="buy" type="button">${p.product === false ? "Začni preizkus" : esc(trial)}</button>
-    <button class="btn ghost" id="restore" type="button">Obnovi nakup</button>
-    <p class="note">${p.product === false ? "Naročnina v App Store še ni odprta. Med preizkusom je Fixko za mojstre brezplačen." : "Naročnina se podaljša vsak mesec, dokler je ne prekličeš v nastavitvah Apple ID. Prekličeš kadarkoli."}</p>
+    ${ios ? `<button class="btn ghost" id="restore" type="button">Obnovi nakup</button>` : ""}
+    <p class="note">${p.product === false ? (ios ? "Naročnina v App Store še ni odprta." : "Naročnina še ni odprta.") + " Med preizkusom je Fixko za mojstre brezplačen." : "Naročnina se podaljša vsak mesec, dokler je ne prekličeš v nastavitvah Apple ID. Prekličeš kadarkoli."}</p>
   </div>
   <div class="foot"><button class="link" id="edit" type="button">Uredi profil</button></div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
@@ -582,9 +595,9 @@ function renderPaywall() {
     }
     try { await done(await FixkoPay.buy()); } catch (e) { err(e.message || "Nakup ni uspel."); }
   };
-  document.getElementById("restore").onclick = async () => {
+  document.getElementById("restore")?.addEventListener("click", async () => {
     try { const s = await FixkoPay.restore(); s.active ? await done(s) : err("Aktivne naročnine nismo našli."); } catch (e) { err("Obnova ni uspela."); }
-  };
+  });
 }
 function takeSheet(j) {
   if (!j) return;
@@ -677,7 +690,7 @@ function settingsSheet() {
   const d = document.createElement("div"); d.className = "sheet";
   d.innerHTML = `<div role="dialog" aria-label="Nastavitve"><h2 style="margin-top:0">Nastavitve</h2>
     ${S.mojster ? `<button class="btn ghost" type="button" id="prof">Uredi profil mojstra</button>` : ""}
-    ${S.mojster && native ? `<button class="btn ghost" type="button" id="man">Upravljaj naročnino</button>` : ""}
+    ${S.mojster && ios ? `<button class="btn ghost" type="button" id="man">Upravljaj naročnino</button>` : ""}
     <button class="btn ghost" type="button" id="obv">Vklopi obvestila</button>
     <a class="btn ghost" href="zasebnost.html">Zasebnost in pogoji</a>
     <button class="btn danger" type="button" id="del">Izbriši moje podatke</button>
@@ -690,7 +703,7 @@ function settingsSheet() {
   d.querySelector("#man")?.addEventListener("click", () => FixkoPay.manage().catch(() => {}));
   d.querySelector("#obv").onclick = async () => {
     const t = await enablePush();
-    if (!t) return toast("Obvestila so izklopljena", "Vklopi jih v Nastavitve > Fixko > Obvestila.");
+    if (!t) return toast("Obvestila so izklopljena", android && !window.FIXKO_PUSH ? "Na Androidu bodo obvestila na voljo v naslednji verziji." : "Vklopi jih v nastavitvah telefona: Fixko > Obvestila.");
     if (S.mojster) await setDoc(doc(db, "mojstri", uid), { push: t }, { merge: true }).catch(() => {});
     toast("Obvestila so vklopljena", "");
   };
@@ -740,7 +753,7 @@ function shrink(file, max = 1280) {
   // Naročnina: ob vsakem zagonu potrdimo strežniku, da velja (podaljšanja, obnovitve).
   S.pay = await payStatus();
   if (S.pay.active) await sendJws(S.pay);
-  if (native) FixkoPay.addListener("change", async (s) => { S.pay = s; await sendJws(s); if (prefs.role === "M") renderM(); });
+  if (ios) FixkoPay.addListener("change", async (s) => { S.pay = s; await sendJws(s); if (prefs.role === "M") renderM(); });
   if (prefs.role === "M") renderM();
   // Mojster: osveži žeton za obvestila (iOS ga lahko zamenja).
   if (S.mojster) enablePush().then((t) => { if (t && t !== S.mojster?.push) setDoc(doc(db, "mojstri", uid), { push: t }, { merge: true }).catch(() => {}); });
