@@ -303,6 +303,12 @@ function renderM() {
   if (!prefs.uvod) return render();
   if (!db) { view.innerHTML = `<div class="empty">Del za mojstre bo deloval, ko bo Fixko povezan s strežnikom.</div>`; return; }
   if (!S.mojster || S.urejam || !profilPopoln(S.mojster)) return renderProfil();
+  if (!aktiven() && testnaFirma(S.mojster.firma) && S.testniVklop !== "napaka") {
+    // Testni račun lastnikov: brez plačila.
+    view.innerHTML = `<div class="spin">Vklapljam testni račun ...</div>`;
+    if (!S.testniVklop) { S.testniVklop = true; call("narocnina", { testni: true }).catch((e) => { console.error(e); S.testniVklop = "napaka"; renderM(); }); }
+    return;
+  }
   if (!aktiven()) return renderPaywall();
   const skrita = new Set(prefs.skrita || []);
   const prosta = S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));

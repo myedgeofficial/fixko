@@ -142,6 +142,14 @@ exports.narocnina = onCall(async (req) => {
   const m = await mRef.get();
   if (!m.exists) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
 
+  // Testni mojster lastnikov (firma Sraufnciger): brezplačno za eno leto, brez nakupa.
+  if (req.data?.testni) {
+    if (!testnaFirma(m.data().firma)) throw new HttpsError("permission-denied", "Ni testni račun.");
+    const narocninaDo = Timestamp.fromMillis(Date.now() + 365 * 864e5);
+    await mRef.update({ narocninaDo });
+    return { do: narocninaDo.toMillis(), testni: true };
+  }
+
   // Preizkus med TestFlight testiranjem (dokler naročnina v App Store ni odprta).
   if (req.data?.preizkus) {
     if (process.env.PREIZKUS !== "1") throw new HttpsError("failed-precondition", "Preizkus ni na voljo.");
