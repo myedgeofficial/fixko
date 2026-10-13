@@ -6,12 +6,12 @@ name: Android aplikacija
 on:
   pull_request:
   push:
-    branches: [main, claude/project-thread-max3xa]
+    branches: [main]
     paths: ["web/**", "app/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 concurrency:
-  group: android-${{ github.ref }}
+  group: android-${{ github.event_name == 'pull_request' && github.ref || 'izdaja' }}
   cancel-in-progress: true
 
 permissions:
@@ -90,8 +90,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete android --cleanup-tag --yes || true
-          gh release create android "$RUNNER_TEMP/Fixko.apk" --prerelease --target "$GITHUB_SHA" \
-            --title "Fixko za Android (test)" \
-            --notes "Testna verzija 1.0.$FIXKO_VERSION_CODE. Prenesi Fixko.apk na telefonu in ga odpri (dovoli namestitev iz brskalnika)."
+          # Izdajo samo posodobimo (ne brišemo), da povezava za prenos nikoli ne izgine.
+          NOTES="Testna verzija 1.0.$FIXKO_VERSION_CODE. Prenesi Fixko.apk na telefonu in ga odpri (dovoli namestitev iz brskalnika)."
+          if gh release view android >/dev/null 2>&1; then
+            gh release upload android "$RUNNER_TEMP/Fixko.apk" --clobber
+            gh release edit android --draft=false --prerelease --title "Fixko za Android (test)" --notes "$NOTES"
+          else
+            gh release create android "$RUNNER_TEMP/Fixko.apk" --prerelease --target "$GITHUB_SHA" --title "Fixko za Android (test)" --notes "$NOTES"
+          fi
+          curl -sfI -L "https://github.com/${GITHUB_REPOSITORY}/releases/download/android/Fixko.apk" -o /dev/null || { echo "::error::Povezava za prenos ne deluje"; exit 1; }
           echo "::notice::https://github.com/${GITHUB_REPOSITORY}/releases/download/android/Fixko.apk"
