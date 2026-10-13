@@ -86,7 +86,7 @@ function setRole(r) { prefs.role = r; prefs.uvod = true; savePrefs(); render(); 
 function render() {
   const uvod = !prefs.uvod;
   document.querySelector(".switch").hidden = uvod;
-  if (uvod) { document.getElementById("oglas").hidden = true; document.body.classList.remove("z-oglasom"); return renderUvod(); }
+  if (uvod) { document.getElementById("oglas").hidden = true; document.body.classList.remove("z-oglasom"); if (!view.querySelector(".izbira")) renderUvod(); return; }
   document.getElementById("tabN").setAttribute("aria-pressed", prefs.role === "N");
   document.getElementById("tabM").setAttribute("aria-pressed", prefs.role === "M");
   // Oglasna pasica samo pri strankah (mojstri plačujejo naročnino).
@@ -155,6 +155,7 @@ async function najdiLokacijo(vprasaj) {
 }
 
 function renderN() {
+  if (!prefs.uvod) return render(); // posodobitve iz baze ne smejo preskočiti uvodnega zaslona
   const aktivna = S.myJobs.filter((j) => j.status === "odprto" || j.status === "prevzeto");
   const stara = S.myJobs.filter((j) => !aktivna.includes(j));
   view.innerHTML = `
@@ -299,6 +300,7 @@ function watchMine() {
 /* =================== MOJSTER =================== */
 const aktiven = () => S.mojster?.narocninaDo && S.mojster.narocninaDo.toMillis() > Date.now();
 function renderM() {
+  if (!prefs.uvod) return render();
   if (!db) { view.innerHTML = `<div class="empty">Del za mojstre bo deloval, ko bo Fixko povezan s strežnikom.</div>`; return; }
   if (!S.mojster || S.urejam || !profilPopoln(S.mojster)) return renderProfil();
   if (!aktiven()) return renderPaywall();
