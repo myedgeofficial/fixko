@@ -32,8 +32,9 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   // Stranka
   await p.click('.izbira[data-r="N"]');
   await p.waitForSelector("#opis");
-  sh("adb emu geo fix 15.6459 46.5547");
+  const geo = setInterval(() => sh("adb emu geo fix 15.6459 46.5547"), 2000);
   await p.waitForFunction(() => !/Iščem/.test(document.getElementById("kraj")?.textContent || ""), null, { timeout: 25000 }).catch(() => {});
+  clearInterval(geo);
   await slika("03-stranka");
   ok("lokacija najde kraj", /Maribor/.test(await p.textContent("#kraj")), (await p.textContent("#kraj")).trim().replace(/\s+/g, " ").slice(0, 60));
   await p.fill("#opis", "Pušča pipa v kuhinji");
@@ -60,8 +61,7 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   const t = await p.waitForSelector(".toast", { timeout: 20000 }).then((e) => e.textContent()).catch(() => "");
   ok("obvestila vklopljena (FCM)", /vklopljena/.test(t), t.trim());
   await slika("08-obvestila");
-  nazaj(); await pocakaj(800);
-  nazaj(); await pocakaj(800);
+  if ((await p.$$(".sheet")).length) { nazaj(); await pocakaj(800); }
 
   // Zasebnost: stran in nazaj
   await p.click("#nast"); await pocakaj(500);

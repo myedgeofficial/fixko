@@ -158,7 +158,9 @@ async function najdiLokacijo(vprasaj) {
     let p = await Geolocation.checkPermissions();
     if (p.location !== "granted" && vprasaj) p = await Geolocation.requestPermissions();
     if (p.location !== "granted") throw new Error("ni dovoljenja");
-    const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+    // Najprej hitra lokacija (omrežje); če je ni, še GPS (nekateri Android telefoni brez omrežne lokacije).
+    const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 })
+      .catch(() => Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 600000 }));
     const k = krajIzLokacije(pos.coords.latitude, pos.coords.longitude);
     if (k && !prefs.krajRocno) { prefs.kraj = k.kraj; prefs.regija = k.regija; savePrefs(); }
     else if (!k && vprasaj) draft.urejamKraj = true;
