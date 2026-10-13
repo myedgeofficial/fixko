@@ -43,6 +43,7 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   await slika("04-stranka-opis");
 
   // Pomoč + tipka Nazaj zapre okno
+  await p.evaluate(() => document.activeElement?.blur()); sh("adb shell input keyevent 111"); await pocakaj(800);
   await p.click("#pomoc"); await pocakaj(600);
   await slika("05-pomoc");
   nazaj(); await pocakaj(1200);
