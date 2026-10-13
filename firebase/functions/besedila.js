@@ -22,7 +22,7 @@ function opisTermina(ms, now = Date.now()) {
 }
 // Slovenska davčna številka: 8 števk, kontrolna števka po modulu 11 (enako kot v aplikaciji).
 // Testni mojster (samo za preizkušanje lastnikov): sme brez davčne številke.
-const TESTNA_FIRMA = "mirkosraufnciger";
+const TESTNA_FIRMA = "sraufnciger";
 function testnaFirma(f) {
   return String(f || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "").includes(TESTNA_FIRMA);
 }

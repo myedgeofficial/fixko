@@ -380,7 +380,7 @@ function renderProfil() {
       if (!novaSlika && !m.slika) return err("Dodaj svojo sliko. Stranke raje odprejo vrata nekomu, ki ga prepoznajo.");
       if (m.ime.trim().split(/\s+/).length < 2) return err("Vpiši ime in priimek.");
       if (m.firma.trim().length < 3) return err("Vpiši ime podjetja, kot je v poslovnem registru.");
-      const brezDavcne = testnaFirma(m.firma) && !m.davcna.trim();
+      const brezDavcne = testnaFirma(m.firma) && !veljavnaDavcna(m.davcna); // testni mojster
       if (!brezDavcne && !veljavnaDavcna(m.davcna)) return err("Davčna številka ni pravilna. Ima 8 števk, npr. 12345678.");
       if (!veljavenTel(m.tel)) return err("Vpiši telefonsko številko, npr. 041 123 456.");
       if (!sel.stroke.size) return err("Izberi vsaj eno stroko.");

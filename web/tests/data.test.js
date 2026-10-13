@@ -44,5 +44,6 @@ test("testna firma sme brez davčne", async () => {
   const { testnaFirma } = await import("../src/data.js");
   assert.ok(testnaFirma("Mirko Šraufnciger s.p."));
   assert.ok(testnaFirma("mirko sraufnciger"));
+  assert.ok(testnaFirma("Sraufnciger d.o.o."));
   assert.ok(!testnaFirma("Kos inštalacije"));
 });
