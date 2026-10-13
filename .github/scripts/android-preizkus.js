@@ -65,7 +65,7 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
 
   // Zasebnost: stran in nazaj
   await p.click("#nast"); await pocakaj(500);
-  await p.click('a[href="zasebnost.html"]'); await pocakaj(2000);
+  await p.click('.sheet a[href="zasebnost.html"]'); await pocakaj(2000);
   await slika("09-zasebnost");
   nazaj(); await pocakaj(2000);
   ok("Nazaj iz zasebnosti v aplikacijo", spredaj() && /index\.html|\/$/.test(p.url()), p.url());
