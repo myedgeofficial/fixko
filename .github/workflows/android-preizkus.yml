@@ -1,0 +1,63 @@
+name: Android preizkus (emulator)
+
+# Zgradi APK z vklopljenim razhroščevanjem WebView, ga zažene v emulatorju in objavi slike zaslonov + rezultat
+# kot izdajo "android-preizkus".
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/project-thread-max3xa]
+    paths: ["web/**", "app/**", ".github/workflows/android-preizkus.yml", ".github/scripts/android-preizkus.js"]
+
+concurrency:
+  group: android-preizkus-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  preizkus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Zgradi APK (z razhroščevanjem WebView)
+        working-directory: app
+        run: |
+          npm ci
+          node -e 'const f="capacitor.config.json",c=require("./"+f);c.android={...c.android,webContentsDebuggingEnabled:true};require("fs").writeFileSync(f,JSON.stringify(c,null,2))'
+          node scripts/build-www.js
+          npx cap sync android
+          cd android && ./gradlew --no-daemon assembleRelease
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Playwright
+        run: npm i --no-save --prefix "$RUNNER_TEMP/pw" playwright@1.56
+      - name: Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis_playstore
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install -r app/android/app/build/outputs/apk/release/app-release.apk
+            NODE_PATH="$RUNNER_TEMP/pw/node_modules" OUT=preizkus node .github/scripts/android-preizkus.js
+            adb logcat -d > preizkus/logcat.txt || true
+      - name: Objavi rezultat
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat preizkus/rezultat.txt || true
+          gh release delete android-preizkus --cleanup-tag --yes || true
+          gh release create android-preizkus preizkus/* --prerelease --target "$GITHUB_SHA" --title "Android preizkus" --notes "Samodejni preizkus v emulatorju."

@@ -17,12 +17,16 @@ esbuild.buildSync({
 });
 for (const f of ["index.html", "app.css", "zasebnost.html", "pogoji.html", "logo.png"]) fs.copyFileSync(path.join(web, f), path.join(out, f));
 
+// Android: obvestila (FCM) delujejo samo, če je zraven google-services.json.
+const gs = path.resolve(__dirname, "..", "android", "app", "google-services.json");
+const push = fs.existsSync(gs) && fs.readFileSync(gs, "utf8").trim() ? "window.FIXKO_PUSH=true;\n" : "";
+
 let cfg = process.env.FIXKO_FB_CONFIG || "";
 const file = path.resolve(__dirname, "..", "fb-config.json");
 if (!cfg && fs.existsSync(file)) cfg = fs.readFileSync(file, "utf8");
 if (cfg) {
   const json = JSON.parse(cfg);
-  fs.writeFileSync(path.join(out, "fb-config.js"), "window.FIXKO_FB=" + JSON.stringify(json) + ";\n");
+  fs.writeFileSync(path.join(out, "fb-config.js"), "window.FIXKO_FB=" + JSON.stringify(json) + ";\n" + push);
   const p = path.join(out, "index.html");
   fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace('<script src="app.js">', '<script src="fb-config.js"></script>\n  <script src="app.js">'));
   console.log("Strežnik:", json.projectId);
