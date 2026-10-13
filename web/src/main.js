@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { STROKE, REGIJE, KDAJ, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA } from "./data.js";
+import { STROKE, REGIJE, KDAJ, DOMA, BUDGET, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA } from "./data.js";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 import { ikona } from "./ikone.js";
 
@@ -49,8 +49,8 @@ function initFb() {
 const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
 
 /* ---------- stanje ---------- */
-const S = { myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true };
-let draft = { cat: "", photo: null, blob: null, opis: "" };
+const S = { ponudbe: [], moje: {}, myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true };
+let draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "" };
 const unsub = [];
 
 /* ---------- obvestila ---------- */
@@ -173,7 +173,16 @@ function renderN() {
     <div id="stroka"></div>
     <div id="kraj"></div>
 
-    <div class="korak"><span>3</span>Kam naj vas mojster pokliče</div>
+    <div class="korak"><span>3</span>Kdaj naj pride</div>
+    <div class="chips" id="kdaj">${KDAJ.map((k) => `<button type="button" class="chip" data-v="${k}" aria-pressed="${draft.kdaj === k}">${k}</button>`).join("")}</div>
+    <label class="big">Kdaj ste doma? <span class="neobv">lahko več</span></label>
+    <div class="chips" id="doma">${DOMA.map((k) => `<button type="button" class="chip" data-v="${k}" aria-pressed="${draft.doma.includes(k)}">${k}</button>`).join("")}</div>
+
+    <div class="korak"><span>4</span>Koliko ste približno pripravljeni plačati?</div>
+    <div class="chips" id="budget">${BUDGET.map((k) => `<button type="button" class="chip" data-v="${k}" aria-pressed="${draft.budget === k}">${k}</button>`).join("")}</div>
+    <p class="hint">Samo okvirno, da se mojster lažje odloči. Točno ceno se dogovorite z njim.</p>
+
+    <div class="korak"><span>5</span>Kam naj vas mojster pokliče</div>
     <input id="tel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(prefs.tel)}" autocomplete="tel" aria-label="Vaša telefonska številka">
 
     <div class="err" id="err" hidden></div>
@@ -189,6 +198,14 @@ function renderN() {
     const fl = e.target.files[0]; if (!fl) return; keep();
     shrink(fl).then(({ url, blob }) => { draft.photo = url; draft.blob = blob; renderN(); }).catch(() => toast("Slike ni bilo mogoče odpreti", "Poskusite z drugo sliko."));
   };
+  const izbira = (id, multi) => view.querySelectorAll(`#${id} .chip`).forEach((b) => (b.onclick = () => {
+    const v = b.dataset.v;
+    if (multi) { draft.doma = draft.doma.includes(v) ? draft.doma.filter((x) => x !== v) : [...draft.doma, v]; b.setAttribute("aria-pressed", draft.doma.includes(v)); return; }
+    draft[id] = v; view.querySelectorAll(`#${id} .chip`).forEach((x) => x.setAttribute("aria-pressed", x.dataset.v === v));
+  }));
+  izbira("kdaj"); izbira("doma", true); izbira("budget");
+  view.querySelectorAll("[data-sprejmi]").forEach((b) => (b.onclick = () => odgovori(b, true)));
+  view.querySelectorAll("[data-zavrni]").forEach((b) => (b.onclick = () => odgovori(b, false)));
   view.querySelectorAll("[data-done]").forEach((b) => (b.onclick = () => setStatus(b.dataset.done, "opravljeno")));
   view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => setStatus(b.dataset.cancel, "preklicano")));
   view.querySelectorAll("[data-prijavim]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavim, kdo: "mojster" })));
@@ -219,16 +236,16 @@ function renderN() {
       await setDoc(doc(db, "dela", id, "zasebno", "kontakt"), { lastnik: uid, tel: prefs.tel.trim(), push: push || null });
       await setDoc(doc(db, "dela", id), {
         lastnik: uid, stroka: draft.cat, opis: draft.opis.trim().slice(0, 200), regija: prefs.regija, kraj: prefs.kraj.trim().slice(0, 80),
-        kdaj: KDAJ[0], slika, status: "odprto", ustvarjeno: serverTimestamp()
+        kdaj: draft.kdaj || KDAJ[0], doma: draft.doma, budget: draft.budget || "Ne vem", slika, status: "odprto", ustvarjeno: serverTimestamp()
       });
       // Učenje: če je stranka stroko izbrala sama, shranimo opis in izbiro (brez osebnih podatkov).
       const predlog = prepoznajStroko(draft.opis);
       if (draft.opis.trim() && predlog !== draft.cat) {
         setDoc(doc(collection(db, "popravki")), { opis: draft.opis.trim().slice(0, 200), predlog, izbrano: draft.cat, ustvarjeno: serverTimestamp() }).catch(() => {});
       }
-      draft = { cat: "", photo: null, blob: null, opis: "", vprasal: true };
+      draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "", vprasal: true };
       renderN();
-      toast("Poslano mojstrom", "Ko se mojster oglasi, vas pokliče. Tukaj vidite, kdo pride in kdaj.");
+      toast("Poslano mojstrom", "Ko se mojster javi, ga tukaj potrdite ali zavrnete.");
     } catch (x) {
       console.error(x);
       btn.disabled = false; btn.textContent = "Pošlji mojstrom";
@@ -275,16 +292,42 @@ function cardN(j) {
     <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}</div></div>
     ${k.mojsterTel ? `<div class="row"><span class="phone">${esc(k.mojsterTel)}</span><a class="btn small" href="tel:${esc(k.mojsterTel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <div class="row"><button class="btn small ghost" type="button" data-done="${j.id}">Delo je opravljeno</button><button class="link muted" type="button" data-prijavim="${j.id}">Prijavi mojstra</button></div>`;
-  else st = `<div class="status"><span class="dot"></span>${j.obvesceni ? `Obvestili smo ${mojstrov(j.obvesceni)}, čakam ...` : "Čakam, da se oglasi mojster ..."}</div>
-    <div class="row"><button class="link" type="button" data-cancel="${j.id}">Prekliči</button></div>`;
+  else {
+    const pon = S.ponudbe.filter((p) => p.delo === j.id && p.status === "caka");
+    st = (pon.length ? `<div class="status"><span class="dot ok"></span>${pon.length === 1 ? "Javil se je mojster. Potrdite ga ali zavrnite." : `Javilo se je ${mojstrov(pon.length).replace("mojstre", "mojstrov")}. Izberite enega.`}</div>
+      ${pon.map((p) => `<div class="ponudba"><div class="mojster">${p.slika ? `<img src="${esc(p.slika)}" alt="">` : ""}<div><b>${esc(p.ime)}</b><span>${esc(p.firma)}</span>${p.davcna ? `<small>Davčna številka ${esc(p.davcna)}</small>` : ""}</div></div>
+        <div class="pogoj"><span>Lahko pride</span><b>${esc(opisTermina(p.termin))}</b></div>${p.cena ? `<div class="pogoj"><span>Okvirna cena</span><b>${esc(p.cena)}</b></div>` : ""}
+        <div class="row"><button class="btn small" type="button" data-sprejmi="${j.id}" data-m="${esc(p.mojster)}">Sprejmi</button><button class="btn small ghost" type="button" data-zavrni="${j.id}" data-m="${esc(p.mojster)}">Zavrni</button></div></div>`).join("")}`
+      : `<div class="status"><span class="dot"></span>${j.obvesceni ? `Obvestili smo ${mojstrov(j.obvesceni)}, čakamo, da se kdo javi ...` : "Čakamo, da se javi mojster ..."}</div>`)
+      + `<div class="meta">${[j.kdaj, ...(j.doma || []), j.budget && j.budget !== "Ne vem" ? j.budget : ""].filter(Boolean).map(esc).join(" · ")}</div>
+      <div class="row"><button class="link" type="button" data-cancel="${j.id}">Prekliči naročilo</button></div>`;
+  }
   const n = { odprto: 1, prevzeto: 2, opravljeno: 3 }[j.status] || 0;
   const pot = n ? `<ol class="pot">${["Poslano", "Mojster prihaja", "Opravljeno"].map((t, i) => `<li class="${i < n ? "da" : ""}${i === n - 1 ? " zdaj" : ""}"><span>${i < n ? ikona("kljukica", 14, 3) : ""}</span>${t}</li>`).join("")}</ol>` : "";
   return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${pot}${st}</div></div>`;
 }
 const tag = (k) => `<span class="tag">${ikona(k, 16, 2.2)}${strokaIme(k)}</span>`;
+async function odgovori(b, sprejmi) {
+  const id = b.dataset.sprejmi || b.dataset.zavrni, mojster = b.dataset.m;
+  b.disabled = true;
+  try {
+    await call("odgovori", { id, mojster, sprejmi });
+    toast(sprejmi ? "Mojster je potrjen" : "Ponudba je zavrnjena", sprejmi ? "Pred prihodom vas pokliče." : "Naročilo ostane odprto za druge mojstre.");
+  } catch (e) { b.disabled = false; toast("Ni uspelo", e.message || "Preverite internet in poskusite znova."); }
+}
 const mojstrov = (n) => n + (n % 100 === 1 || n % 100 === 2 ? " mojstra" : n % 100 === 3 || n % 100 === 4 ? " mojstre" : " mojstrov");
 async function setStatus(id, status) {
   try { await updateDoc(doc(db, "dela", id), { status }); } catch (e) { toast("Ni uspelo", "Preveri internet in poskusi znova."); }
+}
+function watchPonudbe() {
+  unsub.push(onSnapshot(query(collection(db, "ponudbe"), where("lastnik", "==", uid)), (snap) => {
+    S.ponudbe = snap.docs.map((d) => d.data());
+    if (prefs.role === "N" && !document.activeElement?.matches("input,select,textarea")) renderN();
+  }, (e) => console.error("ponudbe", e)));
+  unsub.push(onSnapshot(query(collection(db, "ponudbe"), where("mojster", "==", uid)), (snap) => {
+    S.moje = Object.fromEntries(snap.docs.map((d) => [d.data().delo, d.data()]));
+    if (prefs.role === "M") renderM();
+  }, (e) => console.error("moje ponudbe", e)));
 }
 function watchMine() {
   unsub.push(onSnapshot(query(collection(db, "dela"), where("lastnik", "==", uid), orderBy("ustvarjeno", "desc"), limit(30)), (snap) => {
@@ -311,7 +354,7 @@ function renderM() {
   }
   if (!aktiven()) return renderPaywall();
   const skrita = new Set(prefs.skrita || []);
-  const prosta = S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));
+  const prosta = S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && S.moje[j.id]?.status !== "zavrnjeno" && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));
   view.innerHTML = `
   <div class="bar"><span>${(S.mojster.stroke || []).map(strokaIme).join(", ")} · ${(S.mojster.regije || []).map(regijaIme).join(", ")}</span><button class="link" id="edit" type="button">Uredi</button></div>
   ${S.taken.filter((j) => j.status === "prevzeto").length ? `<h2>Moja dela</h2><div class="list">${S.taken.filter((j) => j.status === "prevzeto").map(cardTaken).join("")}</div>` : ""}
@@ -325,8 +368,12 @@ const profilPopoln = (m) => !!(m && m.slika && m.firma && (m.davcna || testnaFir
 function cardM(j) {
   const nov = !S.seen.has(j.id) && j.ustvarjeno && Date.now() - j.ustvarjeno.toMillis() < 3600e3;
   return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}${nov ? '<span class="new">Novo</span>' : ""}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
-    <div class="meta">${esc(j.kraj)} · ${esc(j.kdaj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>
-    <button class="btn" type="button" data-take="${j.id}" style="margin-top:12px">Prevzemi delo</button>
+    <div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>
+    <div class="pogoj"><span>Stranka želi</span><b>${esc([j.kdaj, ...(j.doma || [])].filter(Boolean).join(", "))}</b></div>
+    ${j.budget ? `<div class="pogoj"><span>Okvirno plačilo</span><b>${esc(j.budget)}</b></div>` : ""}
+    ${j.ponudb ? `<div class="meta">Javili so se že ${mojstrov(j.ponudb).replace("mojstre", "mojstrov")}</div>` : ""}
+    ${S.moje[j.id]?.status === "caka" ? `<div class="status"><span class="dot"></span>Javil si se za ${esc(opisTermina(S.moje[j.id].termin))}. Čakaš na stranko.</div><button class="btn ghost" type="button" data-take="${j.id}">Spremeni termin ali ceno</button>`
+      : `<button class="btn" type="button" data-take="${j.id}" style="margin-top:12px">Javi se za to delo</button>`}
     <div class="row"><button class="link muted" type="button" data-prijavi="${j.id}">Prijavi ali skrij objavo</button></div></div></div>`;
 }
 function cardTaken(j) {
@@ -465,30 +512,34 @@ function takeSheet(j) {
   const dni = dnevi();
   let dan = dni.find((d) => prosteUre(d).length) || dni[1];
   let ura = prosteUre(dan)[0];
+  let cena = S.moje[j.id]?.cena || "";
   const d = document.createElement("div"); d.className = "sheet";
   const draw = () => {
-    d.innerHTML = `<div role="dialog" aria-label="Izberi termin"><h2 style="margin-top:0">Kdaj prideš?</h2><div class="meta">${esc(j.opis || strokaIme(j.stroka))}, ${esc(j.kraj)} · stranki paše: ${esc(j.kdaj)}</div>
+    d.innerHTML = `<div role="dialog" aria-label="Izberi termin"><h2 style="margin-top:0">Kdaj lahko prideš?</h2><div class="meta">${esc(j.opis || strokaIme(j.stroka))}, ${esc(j.kraj)} · stranka želi: ${esc([j.kdaj, ...(j.doma || [])].filter(Boolean).join(", "))}${j.budget ? " · okvirno " + esc(j.budget) : ""}</div>
       <label>Dan</label><div class="chips">${dni.filter((x) => prosteUre(x).length).map((x) => `<button type="button" class="chip" data-d="${x.iso}" aria-pressed="${x.iso === dan.iso}">${x.ime} <span class="meta">${x.datum}</span></button>`).join("")}</div>
       <label>Ura</label><div class="chips">${prosteUre(dan).map((u) => `<button type="button" class="chip" data-u="${u}" aria-pressed="${u === ura}">${u}</button>`).join("")}</div>
+      <label for="cena">Tvoja okvirna cena <span class="neobv">neobvezno</span></label>
+      <input id="cena" maxlength="40" placeholder="npr. okoli 80 €" value="${esc(cena)}">
       <div class="err" id="terr" hidden></div>
-      <button class="btn" type="button" id="ok">Prevzemi in potrdi termin</button><button class="btn ghost" type="button" id="x">Prekliči</button></div>`;
+      <button class="btn" type="button" id="ok">Pošlji stranki</button>
+      <p class="note">Stranka vidi tvoj profil, termin in ceno. Ko te sprejme, dobiš njen telefon.</p><button class="btn ghost" type="button" id="x">Prekliči</button></div>`;
+    d.querySelector("#cena").oninput = (e) => { cena = e.target.value; };
     d.querySelectorAll("[data-d]").forEach((b) => (b.onclick = () => { dan = dni.find((x) => x.iso === b.dataset.d); ura = prosteUre(dan)[0]; draw(); }));
     d.querySelectorAll("[data-u]").forEach((b) => (b.onclick = () => { ura = b.dataset.u; draw(); }));
     d.querySelector("#x").onclick = () => d.remove();
     d.querySelector("#ok").onclick = async () => {
       const [h, m] = ura.split(":").map(Number);
       const termin = new Date(dan.d.getFullYear(), dan.d.getMonth(), dan.d.getDate(), h, m).getTime();
-      const b = d.querySelector("#ok"); b.disabled = true; b.textContent = "Potrjujem ...";
+      const b = d.querySelector("#ok"); b.disabled = true; b.textContent = "Pošiljam ...";
       try {
-        const r = await call("prevzemi", { id: j.id, termin });
-        S.kontakti[j.id] = { tel: r.tel };
+        await call("ponudi", { id: j.id, termin, cena: cena.trim() });
         d.remove();
-        toast("Delo je tvoje", `Stranka vidi, da prideš ${opisTermina(termin)}. Pokliči jo.`);
+        toast("Poslano stranki", `Javil si se za ${opisTermina(termin)}. Ko te stranka sprejme, dobiš obvestilo in njen telefon.`);
         renderM();
       } catch (e) {
-        b.disabled = false; b.textContent = "Prevzemi in potrdi termin";
+        b.disabled = false; b.textContent = "Pošlji stranki";
         const t = d.querySelector("#terr"); t.hidden = false;
-        t.textContent = e.code === "functions/already-exists" ? "To delo je medtem prevzel drug mojster." : e.code === "functions/permission-denied" ? "Naročnina ni aktivna." : "Ni uspelo. Preveri internet in poskusi znova.";
+        t.textContent = e.code === "functions/already-exists" ? "Stranka je medtem že izbrala mojstra." : e.code === "functions/permission-denied" ? "Naročnina ni aktivna." : e.code === "functions/failed-precondition" ? e.message : "Ni uspelo. Preveri internet in poskusi znova.";
       }
     };
   };
@@ -606,6 +657,7 @@ function shrink(file, max = 1280) {
   render();
   watchMine();
   watchMojster();
+  watchPonudbe();
   // Naročnina: ob vsakem zagonu potrdimo strežniku, da velja (podaljšanja, obnovitve).
   S.pay = await payStatus();
   if (S.pay.active) await sendJws(S.pay);

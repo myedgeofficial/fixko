@@ -34,7 +34,9 @@ service cloud.firestore {
         || resource.data.get('mojster', null) == request.auth.uid
         || (resource.data.status == 'odprto' && aktiven()));
       allow create: if prijavljen()
-        && request.resource.data.keys().hasOnly(['lastnik', 'stroka', 'opis', 'regija', 'kraj', 'kdaj', 'slika', 'status', 'ustvarjeno'])
+        && request.resource.data.keys().hasOnly(['lastnik', 'stroka', 'opis', 'regija', 'kraj', 'kdaj', 'doma', 'budget', 'slika', 'status', 'ustvarjeno'])
+        && (!('doma' in request.resource.data) || (request.resource.data.doma is list && request.resource.data.doma.size() <= 4))
+        && (!('budget' in request.resource.data) || besedilo(request.resource.data.budget, 20))
         && request.resource.data.lastnik == request.auth.uid
         && request.resource.data.status == 'odprto'
         && request.resource.data.ustvarjeno == request.time
@@ -61,6 +63,12 @@ service cloud.firestore {
           && !exists(/databases/$(database)/documents/dela/$(id));
         allow update, delete: if false;
       }
+    }
+
+    // Ponudbe mojstrov (piše samo strežnik): vidita jih stranka in mojster, ki se je javil.
+    match /ponudbe/{id} {
+      allow read: if prijavljen() && (resource.data.lastnik == request.auth.uid || resource.data.mojster == request.auth.uid);
+      allow write: if false;
     }
 
     // Profil mojstra: ime, podjetje, davčna (8 števk), slika iz naše shrambe, sprejeti pogoji.

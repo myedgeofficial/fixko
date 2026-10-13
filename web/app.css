@@ -152,3 +152,11 @@ h2.prvi{margin-top:4px}
 .empty svg{color:var(--accent)}
 .empty b{color:var(--ink);font-size:19px}
 #kraj .najdeno{margin-top:14px}
+.neobv{font-weight:400;font-size:15px;color:var(--muted);margin-left:6px}
+#kdaj,#doma,#budget{margin-top:4px}
+.ponudba{border:1.5px solid var(--accent);border-radius:16px;padding:12px;margin-top:12px;background:var(--surface)}
+.ponudba .mojster{margin-top:0}
+.pogoj{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-top:8px;font-size:17px}
+.pogoj span{color:var(--muted)}
+.pogoj b{text-align:right}
+.ponudba .row .btn{flex:1}

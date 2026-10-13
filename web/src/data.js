@@ -9,7 +9,10 @@ export const REGIJE = [
   ["kp", "Koper in Obala"], ["nm", "Novo mesto in Dolenjska"], ["ms", "Murska Sobota in Pomurje"], ["ng", "Nova Gorica in Goriška"],
   ["sg", "Koroška"], ["kk", "Posavje"], ["za", "Zasavje"], ["po", "Postojna in Notranjska"]
 ];
-export const KDAJ = ["Čim prej", "Ta teden", "Kadarkoli"];
+export const KDAJ = ["Čim prej", "Ta teden", "Naslednji teden", "Kadarkoli"];
+// Kdaj je stranka doma (neobvezno, več izbir) in okvirni znesek, da se mojster lažje odloči.
+export const DOMA = ["Dopoldne", "Popoldne", "Zvečer", "Ob vikendih"];
+export const BUDGET = ["Do 50 €", "50 do 150 €", "150 do 500 €", "500 do 1.500 €", "Nad 1.500 €", "Ne vem"];
 export const URE = ["7:00", "8:00", "9:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
 
 export const strokaIme = (k) => (STROKE.find((s) => s[0] === k) || [k, k])[1];

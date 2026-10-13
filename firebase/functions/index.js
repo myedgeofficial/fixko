@@ -1,6 +1,7 @@
 // Fixko strežnik:
 // - novoDelo: ko stranka odda delo, obvesti mojstre te stroke v tej regiji (z aktivno naročnino).
-// - prevzemi: mojster prevzame delo in potrdi termin; stranka dobi obvestilo, mojster njen telefon.
+// - ponudi / odgovori: mojster se javi s terminom, stranka ga sprejme ali zavrne; po sprejemu si izmenjata telefon.
+// - prevzemi: stari neposredni prevzem (za starejše gradnje).
 // - narocnina: preveri Applov podpisan nakup (JWS) in mojstru odklene dela.
 // - izbrisi: izbriše uporabnikove podatke (zahteva App Store).
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
@@ -64,7 +65,7 @@ exports.novoDelo = onDocumentCreated("dela/{id}", async (event) => {
   });
   await event.data.ref.update({ obvesceni: ujemajo.length });
   const title = "Novo delo: " + (delo.opis || strokaIme(delo.stroka));
-  const body = delo.kraj + " · " + delo.kdaj;
+  const body = [delo.kraj, delo.kdaj, delo.budget && delo.budget !== "Ne vem" ? delo.budget : ""].filter(Boolean).join(" · ");
   const res = await sendApns(ujemajo.map((d) => d.data().push), title, body, { vloga: "M", delo: event.params.id });
   // Neveljavne žetone (aplikacija izbrisana) pobrišemo.
   const slabi = res.filter((r) => r.status === 410 || (r.status === 400 && /BadDeviceToken/.test(r.data))).map((r) => r.token);
@@ -102,6 +103,70 @@ exports.prevzemi = onCall(async (req) => {
     await sendApns([kontakt.push], mojster.ime + " pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Pred prihodom vas pokliče.", { vloga: "N", delo: id });
   }
   return { tel: kontakt.tel || "" };
+});
+
+/* ---------- ponudba mojstra → stranka sprejme ali zavrne ---------- */
+// Mojster se javi s terminom (in okvirno ceno). Delo ostane odprto in vidno vsem, dokler stranka ne sprejme ene ponudbe.
+const profilOk = (md) => md.slika && md.firma && (veljavnaDavcna(md.davcna) || testnaFirma(md.firma)) && md.pogoji;
+exports.ponudi = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const id = String(req.data?.id || "");
+  const termin = Number(req.data?.termin);
+  const cena = String(req.data?.cena || "").trim().slice(0, 40);
+  if (!id || !Number.isFinite(termin)) throw new HttpsError("invalid-argument", "Manjka delo ali termin.");
+  if (termin < Date.now() - 3600e3 || termin > Date.now() + 15 * 864e5) throw new HttpsError("invalid-argument", "Termin ni veljaven.");
+  const mRef = db.doc("mojstri/" + uid), dRef = db.doc("dela/" + id), pRef = db.doc("ponudbe/" + id + "_" + uid);
+  const { delo, kontakt, md, nova } = await db.runTransaction(async (t) => {
+    const [m, d, p, k] = await Promise.all([t.get(mRef), t.get(dRef), t.get(pRef), t.get(db.doc("dela/" + id + "/zasebno/kontakt"))]);
+    if (!m.exists || !(m.data().narocninaDo?.toMillis() > Date.now())) throw new HttpsError("permission-denied", "Naročnina ni aktivna.");
+    const md = m.data();
+    if (!profilOk(md)) throw new HttpsError("failed-precondition", "Dopolni profil: slika, podjetje in davčna številka.");
+    if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
+    if (d.data().status !== "odprto") throw new HttpsError("already-exists", "Stranka je že izbrala mojstra.");
+    if (d.data().lastnik === uid) throw new HttpsError("failed-precondition", "Svojega dela ne moreš prevzeti.");
+    if (p.exists && p.data().status !== "caka") throw new HttpsError("failed-precondition", "Stranka je tvojo ponudbo že zavrnila.");
+    t.set(pRef, {
+      delo: id, mojster: uid, lastnik: d.data().lastnik, ime: md.ime, firma: md.firma, davcna: md.davcna || "", slika: md.slika,
+      termin, cena, status: "caka", ustvarjeno: p.exists ? p.data().ustvarjeno : FieldValue.serverTimestamp(), posodobljeno: FieldValue.serverTimestamp()
+    });
+    if (!p.exists) t.update(dRef, { ponudb: FieldValue.increment(1) });
+    return { delo: d.data(), kontakt: k.exists ? k.data() : {}, md, nova: !p.exists };
+  });
+  if (nova && kontakt.push) {
+    await sendApns([kontakt.push], md.ime + " lahko pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Odprite Fixko in potrdite mojstra.", { vloga: "N", delo: id });
+  }
+  return { ok: true };
+});
+
+exports.odgovori = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const id = String(req.data?.id || ""), mojster = String(req.data?.mojster || ""), sprejmi = req.data?.sprejmi === true;
+  if (!id || !mojster) throw new HttpsError("invalid-argument", "Manjka delo ali mojster.");
+  const dRef = db.doc("dela/" + id), pRef = db.doc("ponudbe/" + id + "_" + mojster), kRef = db.doc("dela/" + id + "/zasebno/kontakt");
+  const ostale = sprejmi ? await db.collection("ponudbe").where("delo", "==", id).get() : null;
+  const { delo, md } = await db.runTransaction(async (t) => {
+    const [d, p, m] = await Promise.all([t.get(dRef), t.get(pRef), t.get(db.doc("mojstri/" + mojster))]);
+    if (!d.exists || d.data().lastnik !== uid) throw new HttpsError("permission-denied", "To ni vaše delo.");
+    if (!p.exists || p.data().status !== "caka") throw new HttpsError("failed-precondition", "Ponudba ni več veljavna.");
+    if (!sprejmi) { t.update(pRef, { status: "zavrnjeno" }); return { delo: d.data(), md: m.data() || {} }; }
+    if (d.data().status !== "odprto") throw new HttpsError("already-exists", "Mojstra ste že izbrali.");
+    if (!m.exists) throw new HttpsError("not-found", "Mojster ne obstaja več.");
+    const pd = p.data(), md = m.data();
+    t.update(dRef, {
+      status: "prevzeto", mojster, mojsterIme: md.ime, mojsterFirma: md.firma, mojsterDavcna: md.davcna || "", mojsterSlika: md.slika,
+      termin: pd.termin, cena: pd.cena || "", prevzeto: FieldValue.serverTimestamp()
+    });
+    t.set(kRef, { mojsterTel: md.tel }, { merge: true });
+    t.update(pRef, { status: "sprejeto" });
+    ostale.docs.filter((x) => x.id !== pRef.id && x.data().status === "caka").forEach((x) => t.update(x.ref, { status: "zavrnjeno" }));
+    return { delo: d.data(), md };
+  });
+  if (sprejmi && md.push) {
+    await sendApns([md.push], "Stranka vas je izbrala", (delo.opis || strokaIme(delo.stroka)) + ", " + delo.kraj + ". Pokličite stranko.", { vloga: "M", delo: id });
+  }
+  return { ok: true, tel: sprejmi ? md.tel || "" : "" };
 });
 
 /* ---------- naročnina ---------- */
@@ -192,6 +257,9 @@ exports.izbrisi = onCall(async (req) => {
   }
   batch.delete(db.doc("mojstri/" + uid));
   await batch.commit();
+  // Ponudbe (kot mojster ali stranka).
+  const [p1, p2] = await Promise.all([db.collection("ponudbe").where("mojster", "==", uid).get(), db.collection("ponudbe").where("lastnik", "==", uid).get()]);
+  await Promise.all([...p1.docs, ...p2.docs].map((d) => d.ref.delete()));
   // Prevzeta dela tega mojstra ostanejo strankam vidna, brez telefona mojstra.
   const prevzeta = await db.collection("dela").where("mojster", "==", uid).get();
   await Promise.all(prevzeta.docs.map((d) => d.ref.collection("zasebno").doc("kontakt").set({ mojsterTel: FieldValue.delete() }, { merge: true })));
