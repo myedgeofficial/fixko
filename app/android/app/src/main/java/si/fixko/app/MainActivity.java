@@ -17,7 +17,12 @@ public class MainActivity extends BridgeActivity {
                 if (bridge == null || bridge.getWebView() == null) { moveTaskToBack(true); return; }
                 bridge.getWebView().evaluateJavascript(
                     "(window.fixkoNazaj && window.fixkoNazaj()) ? 'da' : 'ne'",
-                    (r) -> { if (!"\"da\"".equals(r)) moveTaskToBack(true); });
+                    (r) -> {
+                        if ("\"da\"".equals(r)) return;
+                        // Strani brez Fixko kode (npr. Zasebnost): nazaj na prejšnjo stran.
+                        if (bridge.getWebView().canGoBack()) bridge.getWebView().goBack();
+                        else moveTaskToBack(true);
+                    });
             }
         });
     }
