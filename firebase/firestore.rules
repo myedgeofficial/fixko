@@ -45,10 +45,16 @@ service cloud.firestore {
         && request.resource.data.kraj.size() > 0
         && besedilo(request.resource.data.slika, 600) && (request.resource.data.slika == '' || request.resource.data.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*'));
       // Stranka lahko delo samo zaključi ali prekliče.
-      allow update: if prijavljen() && resource.data.lastnik == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+      allow update: if prijavljen() && resource.data.lastnik == request.auth.uid && ((
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status in ['opravljeno', 'preklicano']
-        && resource.data.status in ['odprto', 'prevzeto'];
+        && resource.data.status in ['odprto', 'prevzeto']
+      ) || (
+        // Dodatne slike (npr. ko mojster prosi zanje); prošnja se ob tem zapre.
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['slike', 'prosnja'])
+        && request.resource.data.slike is list && request.resource.data.slike.size() <= 8
+        && request.resource.data.get('prosnja', null) == null
+      ));
       allow delete: if false;
 
       // Telefon stranke (in mojstra po prevzemu): vidita ga samo stranka in mojster, ki je delo prevzel.

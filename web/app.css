@@ -161,3 +161,12 @@ h2.prvi{margin-top:4px}
 .pogoj b{text-align:right}
 .ponudba .row .btn{flex:1}
 .btn.ghost svg{vertical-align:-5px;margin-right:4px}
+.vec{display:flex;gap:6px;padding:6px;overflow-x:auto;background:var(--accent-soft)}
+.vec img{width:84px;height:84px;object-fit:cover;border-radius:10px;flex:none}
+.prosnja{display:flex;gap:12px;align-items:flex-start;margin-top:14px;background:var(--warm-soft);border-radius:14px;padding:12px 14px;color:var(--ink)}
+.prosnja svg{color:var(--warm);flex:none;margin-top:2px}
+.prosnja b{display:block;font-size:18px}
+.prosnja span{display:block;font-size:16px;color:var(--muted)}
+label.btn{cursor:pointer}
+label.btn svg{vertical-align:-5px;margin-right:4px}
+.link svg{vertical-align:-3px}

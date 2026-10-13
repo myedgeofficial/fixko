@@ -97,7 +97,7 @@ function render() {
 }
 
 const icon = (s = 48) => `<svg width="${s}" height="${s}" viewBox="0 0 28 28" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l2-3h8l2 3h4v13H4z"/><circle cx="14" cy="15" r="4"/></svg>`;
-const pic = (j) => `<div class="pic">${j.slika ? `<img src="${esc(j.slika)}" alt="" loading="lazy">` : icon(56)}</div>`;
+const pic = (j) => `<div class="pic">${j.slika ? `<img src="${esc(j.slika)}" alt="" loading="lazy">` : icon(56)}</div>${(j.slike || []).length ? `<div class="vec">${j.slike.map((u) => `<img src="${esc(u)}" alt="" loading="lazy">`).join("")}</div>` : ""}`;
 const opt = (list, sel, prazno) => (prazno ? `<option value="">${prazno}</option>` : "") + list.map(([k, n]) => `<option value="${k}"${k === sel ? " selected" : ""}>${n}</option>`).join("");
 
 /* =================== UVOD =================== */
@@ -206,6 +206,7 @@ function renderN() {
   }));
   izbira("kdaj"); izbira("doma", true); izbira("budget");
   view.querySelectorAll("[data-sprejmi]").forEach((b) => (b.onclick = () => odgovori(b, true)));
+  view.querySelectorAll("[data-vec]").forEach((inp) => (inp.onchange = () => dodajSlike(inp.dataset.vec, [...inp.files])));
   view.querySelectorAll("[data-zavrni]").forEach((b) => (b.onclick = () => odgovori(b, false)));
   view.querySelectorAll("[data-done]").forEach((b) => (b.onclick = () => setStatus(b.dataset.done, "opravljeno")));
   view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => potrdiSheet("Prekličem naročilo?", "Mojstri ga ne bodo več videli.", "Da, prekliči", () => odpovej(b.dataset.cancel, true))));
@@ -309,10 +310,31 @@ function cardN(j) {
       <div class="row"><button class="link" type="button" data-cancel="${j.id}">Prekliči naročilo</button></div>`;
   }
   const n = { odprto: 1, prevzeto: 2, opravljeno: 3 }[j.status] || 0;
+  const aktivno = j.status === "odprto" || j.status === "prevzeto";
+  const slike = aktivno ? `${j.prosnja ? `<div class="prosnja">${ikona("kamera", 22)}<div><b>${esc(j.prosnja.ime)} prosi za več slik</b>${j.prosnja.sporocilo ? `<span>»${esc(j.prosnja.sporocilo)}«</span>` : ""}</div></div>` : ""}
+    <label class="btn ${j.prosnja ? "" : "ghost"}" for="vec-${j.id}">${ikona("kamera", 22)} Dodaj slike</label><input id="vec-${j.id}" data-vec="${j.id}" type="file" accept="image/*" multiple hidden>` : "";
   const pot = n ? `<ol class="pot">${["Poslano", "Mojster prihaja", "Opravljeno"].map((t, i) => `<li class="${i < n ? "da" : ""}${i === n - 1 ? " zdaj" : ""}"><span>${i < n ? ikona("kljukica", 14, 3) : ""}</span>${t}</li>`).join("")}</ol>` : "";
-  return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${pot}${st}</div></div>`;
+  return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${pot}${slike}${st}</div></div>`;
 }
 const tag = (k) => `<span class="tag">${ikona(k, 16, 2.2)}${strokaIme(k)}</span>`;
+async function dodajSlike(id, files) {
+  const j = S.myJobs.find((x) => x.id === id);
+  if (!j || !files.length) return;
+  const prej = j.slike || [];
+  if (prej.length >= 8) return toast("Dovolj slik", "Dodate lahko največ 8 slik.");
+  toast("Nalagam slike ...", "");
+  try {
+    const nove = [];
+    for (const f of files.slice(0, 8 - prej.length)) {
+      const { blob } = await shrink(f);
+      const r = ref(storage, `slike/${uid}/${id}-${Date.now()}-${nove.length}.jpg`);
+      await uploadBytes(r, blob, { contentType: "image/jpeg" });
+      nove.push(await getDownloadURL(r));
+    }
+    await updateDoc(doc(db, "dela", id), { slike: [...prej, ...nove], prosnja: null });
+    toast("Slike so dodane", "Mojstri jih že vidijo.");
+  } catch (e) { console.error(e); toast("Ni uspelo", "Preverite internet in poskusite znova."); }
+}
 async function odgovori(b, sprejmi) {
   const id = b.dataset.sprejmi || b.dataset.zavrni, mojster = b.dataset.m;
   b.disabled = true;
@@ -369,6 +391,7 @@ function renderM() {
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
   view.querySelectorAll("[data-take]").forEach((b) => (b.onclick = () => takeSheet(prosta.find((j) => j.id === b.dataset.take))));
   view.querySelectorAll("[data-koledar]").forEach((b) => (b.onclick = () => vKoledar(S.taken.find((j) => j.id === b.dataset.koledar), "M")));
+  view.querySelectorAll("[data-slike]").forEach((b) => (b.onclick = () => prosiSheet(b.dataset.slike)));
   view.querySelectorAll("[data-odpovem]").forEach((b) => (b.onclick = () => potrdiSheet("Odpovem termin?", "Stranka dobi obvestilo, delo pa se znova odpre za druge mojstre. Za to delo se ne moreš več javiti.", "Da, odpovej", () => odpovej(b.dataset.odpovem, false))));
   view.querySelectorAll("[data-prijavi]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavi, kdo: "objava" })));
 }
@@ -382,7 +405,7 @@ function cardM(j) {
     ${j.ponudb ? `<div class="meta">Javili so se že ${mojstrov(j.ponudb).replace("mojstre", "mojstrov")}</div>` : ""}
     ${S.moje[j.id]?.status === "caka" ? `<div class="status"><span class="dot"></span>Javil si se za ${esc(opisTermina(S.moje[j.id].termin))}. Čakaš na stranko.</div><button class="btn ghost" type="button" data-take="${j.id}">Spremeni termin ali ceno</button>`
       : `<button class="btn" type="button" data-take="${j.id}" style="margin-top:12px">Javi se za to delo</button>`}
-    <div class="row"><button class="link muted" type="button" data-prijavi="${j.id}">Prijavi ali skrij objavo</button></div></div></div>`;
+    <div class="row">${j.prosnja ? `<span class="meta">Prošnja za slike je poslana</span>` : `<button class="link" type="button" data-slike="${j.id}">${ikona("kamera", 18)} Prosi za več slik</button>`}<button class="link muted" type="button" data-prijavi="${j.id}">Prijavi ali skrij</button></div></div></div>`;
 }
 function cardTaken(j) {
   const k = S.kontakti[j.id] || {};
@@ -392,6 +415,22 @@ function cardTaken(j) {
     ${k.tel ? `<div class="row"><span class="phone">${esc(k.tel)}</span><a class="btn small" href="tel:${esc(k.tel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
     <div class="row"><button class="link" type="button" data-odpovem="${j.id}">Odpovej termin</button></div></div></div>`;
+}
+function prosiSheet(id) {
+  const d = document.createElement("div"); d.className = "sheet";
+  d.innerHTML = `<div role="dialog" aria-label="Prosi za več slik"><h2 style="margin-top:0">Prosi za več slik</h2>
+    <p class="lead">Stranka dobi obvestilo. Napiši, kaj naj slika (neobvezno).</p>
+    <input id="msg" maxlength="140" placeholder="npr. Slikajte še števec in pipo od blizu">
+    <div class="err" id="perr" hidden></div>
+    <button class="btn" type="button" id="ok">Pošlji prošnjo</button><button class="btn ghost" type="button" id="x">Prekliči</button></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  d.querySelector("#x").onclick = () => d.remove();
+  d.querySelector("#ok").onclick = async () => {
+    const b = d.querySelector("#ok"); b.disabled = true;
+    try { await call("prosiSlike", { id, sporocilo: d.querySelector("#msg").value }); d.remove(); toast("Prošnja je poslana", "Ko stranka doda slike, jih vidiš pri objavi."); }
+    catch (e) { b.disabled = false; const t = d.querySelector("#perr"); t.hidden = false; t.textContent = e.message || "Ni uspelo."; }
+  };
 }
 // Potrditev pred nepovratnim dejanjem (odpoved, preklic).
 function potrdiSheet(naslov, besedilo, gumb, akcija) {

@@ -207,6 +207,22 @@ exports.odpovej = onCall(async (req) => {
   return { ok: true };
 });
 
+// Mojster prosi stranko za več slik (neobvezno z navodilom, kaj naj slika).
+exports.prosiSlike = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const id = String(req.data?.id || ""), sporocilo = String(req.data?.sporocilo || "").trim().slice(0, 140);
+  const [m, d] = await Promise.all([db.doc("mojstri/" + uid).get(), db.doc("dela/" + id).get()]);
+  if (!m.exists || !(m.data().narocninaDo?.toMillis() > Date.now())) throw new HttpsError("permission-denied", "Naročnina ni aktivna.");
+  if (!d.exists || !(d.data().status === "odprto" || d.data().mojster === uid)) throw new HttpsError("failed-precondition", "Dela ni več.");
+  await d.ref.update({ prosnja: { ime: m.data().ime || "Mojster", sporocilo, cas: FieldValue.serverTimestamp() } });
+  const k = await db.doc("dela/" + id + "/zasebno/kontakt").get();
+  if (k.exists && k.data().push) {
+    await sendApns([k.data().push], (m.data().ime || "Mojster") + " prosi za več slik", sporocilo || (d.data().opis || strokaIme(d.data().stroka)) + ". Dodajte jih v Fixku.", { vloga: "N", delo: id });
+  }
+  return { ok: true };
+});
+
 /* ---------- naročnina ---------- */
 // Applov korenski certifikat (Apple Root CA - G3), s katerim je podpisana veriga vsakega nakupa.
 let appleRoot = null;
