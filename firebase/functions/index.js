@@ -20,6 +20,8 @@ const db = admin.firestore();
 const BUNDLE_ID = process.env.APNS_TOPIC || "si.fixko.app";
 const PRODUCT_ID = process.env.PRODUCT_ID || "si.fixko.app.mojster.mesecno";
 const PREIZKUS_DNI = 30;
+// Zaenkrat je Fixko brezplačen za vse mojstre (BREZPLACNO=0 vklopi naročnino).
+const BREZPLACNO = process.env.BREZPLACNO !== "0";
 
 /* ---------- obvestila (APNs, FCM) ---------- */
 function apnsJwt() {
@@ -283,9 +285,9 @@ exports.narocnina = onCall(async (req) => {
   const m = await mRef.get();
   if (!m.exists) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
 
-  // Testni mojster lastnikov (firma Sraufnciger): brezplačno za eno leto, brez nakupa.
-  if (req.data?.testni) {
-    if (!testnaFirma(m.data().firma)) throw new HttpsError("permission-denied", "Ni testni račun.");
+  // Brezplačen dostop (zaenkrat za vse) ali testni mojster lastnikov (firma Sraufnciger): eno leto, brez nakupa.
+  if (req.data?.testni || req.data?.brezplacno) {
+    if (!BREZPLACNO && !testnaFirma(m.data().firma)) throw new HttpsError("permission-denied", "Ni testni račun.");
     const narocninaDo = Timestamp.fromMillis(Date.now() + 365 * 864e5);
     await mRef.update({ narocninaDo });
     return { do: narocninaDo.toMillis(), testni: true };

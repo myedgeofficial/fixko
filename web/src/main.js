@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { STROKE, REGIJE, KDAJ, DOMA, BUDGET, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA } from "./data.js";
+import { STROKE, REGIJE, KDAJ, DOMA, BUDGET, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA, BREZPLACNO } from "./data.js";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 import { ikona } from "./ikone.js";
 
@@ -103,8 +103,8 @@ function render() {
   document.getElementById("tabN").setAttribute("aria-pressed", prefs.role === "N");
   document.getElementById("tabM").setAttribute("aria-pressed", prefs.role === "M");
   // Oglasna pasica samo pri strankah (mojstri plačujejo naročnino).
-  document.getElementById("oglas").hidden = prefs.role !== "N";
-  document.body.classList.toggle("z-oglasom", prefs.role === "N");
+  document.getElementById("oglas").hidden = false;
+  document.body.classList.add("z-oglasom");
   prefs.role === "N" ? renderN() : renderM();
 }
 
@@ -386,10 +386,10 @@ function renderM() {
   if (!prefs.uvod) return render();
   if (!db) { view.innerHTML = `<div class="empty">Del za mojstre bo deloval, ko bo Fixko povezan s strežnikom.</div>`; return; }
   if (!S.mojster || S.urejam || !profilPopoln(S.mojster)) return renderProfil();
-  if (!aktiven() && testnaFirma(S.mojster.firma) && S.testniVklop !== "napaka") {
-    // Testni račun lastnikov: brez plačila.
-    view.innerHTML = `<div class="spin">Vklapljam testni račun ...</div>`;
-    if (!S.testniVklop) { S.testniVklop = true; call("narocnina", { testni: true }).catch((e) => { console.error(e); S.testniVklop = "napaka"; renderM(); }); }
+  if (!aktiven() && (BREZPLACNO || testnaFirma(S.mojster.firma)) && S.testniVklop !== "napaka") {
+    // Brezplačen dostop (zaenkrat za vse) ali testni račun lastnikov.
+    view.innerHTML = `<div class="spin">Pripravljam prosta dela ...</div>`;
+    if (!S.testniVklop) { S.testniVklop = true; call("narocnina", BREZPLACNO ? { brezplacno: true } : { testni: true }).catch((e) => { console.error(e); S.testniVklop = "napaka"; renderM(); }); }
     return;
   }
   if (!aktiven()) return renderPaywall();
@@ -690,7 +690,7 @@ function settingsSheet() {
   const d = document.createElement("div"); d.className = "sheet";
   d.innerHTML = `<div role="dialog" aria-label="Nastavitve"><h2 style="margin-top:0">Nastavitve</h2>
     ${S.mojster ? `<button class="btn ghost" type="button" id="prof">Uredi profil mojstra</button>` : ""}
-    ${S.mojster && ios ? `<button class="btn ghost" type="button" id="man">Upravljaj naročnino</button>` : ""}
+    ${S.mojster && ios && !BREZPLACNO ? `<button class="btn ghost" type="button" id="man">Upravljaj naročnino</button>` : ""}
     <button class="btn ghost" type="button" id="obv">Vklopi obvestila</button>
     <a class="btn ghost" href="zasebnost.html">Zasebnost in pogoji</a>
     <button class="btn danger" type="button" id="del">Izbriši moje podatke</button>
