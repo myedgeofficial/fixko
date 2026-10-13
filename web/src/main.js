@@ -15,6 +15,7 @@ import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 import { ikona } from "./ikone.js";
 
 const FixkoPay = registerPlugin("FixkoPay");
+const FixkoKoledar = registerPlugin("FixkoKoledar");
 const native = Capacitor.isNativePlatform();
 const view = document.getElementById("view");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -207,7 +208,9 @@ function renderN() {
   view.querySelectorAll("[data-sprejmi]").forEach((b) => (b.onclick = () => odgovori(b, true)));
   view.querySelectorAll("[data-zavrni]").forEach((b) => (b.onclick = () => odgovori(b, false)));
   view.querySelectorAll("[data-done]").forEach((b) => (b.onclick = () => setStatus(b.dataset.done, "opravljeno")));
-  view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => setStatus(b.dataset.cancel, "preklicano")));
+  view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => potrdiSheet("Prekličem naročilo?", "Mojstri ga ne bodo več videli.", "Da, prekliči", () => odpovej(b.dataset.cancel, true))));
+  view.querySelectorAll("[data-zamenjaj]").forEach((b) => (b.onclick = () => potrdiSheet("Zamenjam mojstra?", "Temu mojstru odpoveste termin. Naročilo ostane objavljeno, druge ponudbe se vrnejo in izberete lahko drugega mojstra.", "Da, zamenjaj", () => odpovej(b.dataset.zamenjaj, false))));
+  view.querySelectorAll("[data-koledar]").forEach((b) => (b.onclick = () => vKoledar(S.myJobs.find((j) => j.id === b.dataset.koledar), "N")));
   view.querySelectorAll("[data-prijavim]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavim, kdo: "mojster" })));
   osveziStroko(); osveziKraj();
   if (!prefs.kraj && !draft.urejamKraj && !draft.vprasal) { draft.vprasal = true; najdiLokacijo(true); }
@@ -291,7 +294,10 @@ function cardN(j) {
   else if (j.status === "prevzeto") st = `<div class="status"><span class="dot ok"></span>Mojster pride ${esc(opisTermina(j.termin))}</div>
     <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}</div></div>
     ${k.mojsterTel ? `<div class="row"><span class="phone">${esc(k.mojsterTel)}</span><a class="btn small" href="tel:${esc(k.mojsterTel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
-    <div class="row"><button class="btn small ghost" type="button" data-done="${j.id}">Delo je opravljeno</button><button class="link muted" type="button" data-prijavim="${j.id}">Prijavi mojstra</button></div>`;
+    <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
+    <button class="btn ghost" type="button" data-done="${j.id}">Delo je opravljeno</button>
+    <div class="row"><button class="link" type="button" data-zamenjaj="${j.id}">Zamenjaj mojstra</button><button class="link" type="button" data-cancel="${j.id}">Prekliči naročilo</button></div>
+    <div class="row"><button class="link muted" type="button" data-prijavim="${j.id}">Prijavi mojstra</button></div>`;
   else {
     const pon = S.ponudbe.filter((p) => p.delo === j.id && p.status === "caka");
     st = (pon.length ? `<div class="status"><span class="dot ok"></span>${pon.length === 1 ? "Javil se je mojster. Potrdite ga ali zavrnite." : `Javilo se je ${mojstrov(pon.length).replace("mojstre", "mojstrov")}. Izberite enega.`}</div>
@@ -354,7 +360,7 @@ function renderM() {
   }
   if (!aktiven()) return renderPaywall();
   const skrita = new Set(prefs.skrita || []);
-  const prosta = S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && S.moje[j.id]?.status !== "zavrnjeno" && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));
+  const prosta = S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && !["zavrnjeno", "odpovedal"].includes(S.moje[j.id]?.status) && (S.mojster.regije || []).some((r) => r === "vsa" || r === j.regija));
   view.innerHTML = `
   <div class="bar"><span>${(S.mojster.stroke || []).map(strokaIme).join(", ")} · ${(S.mojster.regije || []).map(regijaIme).join(", ")}</span><button class="link" id="edit" type="button">Uredi</button></div>
   ${S.taken.filter((j) => j.status === "prevzeto").length ? `<h2>Moja dela</h2><div class="list">${S.taken.filter((j) => j.status === "prevzeto").map(cardTaken).join("")}</div>` : ""}
@@ -362,6 +368,8 @@ function renderM() {
   <div class="list">${prosta.length ? prosta.map(cardM).join("") : `<div class="empty">${ikona("orodje", 40, 1.5)}<b>Trenutno ni prostih del</b>Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo.</div>`}</div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
   view.querySelectorAll("[data-take]").forEach((b) => (b.onclick = () => takeSheet(prosta.find((j) => j.id === b.dataset.take))));
+  view.querySelectorAll("[data-koledar]").forEach((b) => (b.onclick = () => vKoledar(S.taken.find((j) => j.id === b.dataset.koledar), "M")));
+  view.querySelectorAll("[data-odpovem]").forEach((b) => (b.onclick = () => potrdiSheet("Odpovem termin?", "Stranka dobi obvestilo, delo pa se znova odpre za druge mojstre. Za to delo se ne moreš več javiti.", "Da, odpovej", () => odpovej(b.dataset.odpovem, false))));
   view.querySelectorAll("[data-prijavi]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavi, kdo: "objava" })));
 }
 const profilPopoln = (m) => !!(m && m.slika && m.firma && (m.davcna || testnaFirma(m.firma)) && m.pogoji === POGOJI_VERZIJA);
@@ -381,7 +389,39 @@ function cardTaken(j) {
   return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
     <div class="meta">${esc(j.kraj)}</div>
     <div class="status"><span class="dot ok"></span>Tvoj termin: ${esc(opisTermina(j.termin))}</div>
-    ${k.tel ? `<div class="row"><span class="phone">${esc(k.tel)}</span><a class="btn small" href="tel:${esc(k.tel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}</div></div>`;
+    ${k.tel ? `<div class="row"><span class="phone">${esc(k.tel)}</span><a class="btn small" href="tel:${esc(k.tel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
+    <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
+    <div class="row"><button class="link" type="button" data-odpovem="${j.id}">Odpovej termin</button></div></div></div>`;
+}
+// Potrditev pred nepovratnim dejanjem (odpoved, preklic).
+function potrdiSheet(naslov, besedilo, gumb, akcija) {
+  const d = document.createElement("div"); d.className = "sheet";
+  d.innerHTML = `<div role="dialog" aria-label="${esc(naslov)}"><h2 style="margin-top:0">${esc(naslov)}</h2><p class="lead">${esc(besedilo)}</p>
+    <button class="btn danger" type="button" id="da">${esc(gumb)}</button><button class="btn ghost" type="button" id="x">Ne</button></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  d.querySelector("#x").onclick = () => d.remove();
+  d.querySelector("#da").onclick = () => { d.remove(); akcija(); };
+}
+async function odpovej(id, celo) {
+  try {
+    await call("odpovej", { id, celo });
+    if (prefs.role === "M") toast("Termin je odpovedan", "Stranka je dobila obvestilo.");
+    else toast(celo ? "Naročilo je preklicano" : "Termin je odpovedan", celo ? "" : "Naročilo je znova odprto. Izberite drugega mojstra.");
+  } catch (e) { toast("Ni uspelo", e.message || "Preverite internet in poskusite znova."); }
+}
+// Termin v Apple koledar (z opozorilom uro prej) in v Opomnike.
+async function vKoledar(j, vloga) {
+  if (!j || !j.termin) return;
+  const naslov = vloga === "M" ? `Fixko: ${j.opis || strokaIme(j.stroka)}` : `Fixko: pride ${j.mojsterIme || "mojster"}`;
+  const tel = vloga === "M" ? S.kontakti[j.id]?.tel : S.kontakti[j.id]?.mojsterTel;
+  const opis = [j.opis || strokaIme(j.stroka), vloga === "N" ? j.mojsterFirma : "", tel ? "Telefon: " + tel : "", j.cena ? "Okvirna cena: " + j.cena : ""].filter(Boolean).join("\n");
+  if (!native) return toast("Samo v aplikaciji", "Koledar deluje v aplikaciji na iPhonu.");
+  try {
+    const r = await FixkoKoledar.dodaj({ naslov, opis, kraj: j.kraj || "", zacetek: j.termin });
+    if (r.koledar || r.opomnik) toast("Dodano", [r.koledar ? "v koledar" : "", r.opomnik ? "v opomnike" : ""].filter(Boolean).join(" in ") + ". Opozorilo dobite uro prej.");
+    else toast("Ni dovoljenja", "Dovolite dostop v Nastavitve > Fixko > Koledarji in Opomniki.");
+  } catch (e) { toast("Ni uspelo", "Termina ni bilo mogoče dodati."); }
 }
 function renderProfil() {
   // Osnutek obrazca ostane med ponovnimi izrisi (npr. ko pride posodobitev iz baze med tipkanjem).

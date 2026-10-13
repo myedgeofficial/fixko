@@ -160,3 +160,4 @@ h2.prvi{margin-top:4px}
 .pogoj span{color:var(--muted)}
 .pogoj b{text-align:right}
 .ponudba .row .btn{flex:1}
+.btn.ghost svg{vertical-align:-5px;margin-right:4px}

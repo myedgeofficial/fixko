@@ -14,6 +14,7 @@ enum PayConfig {
 class MainViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(FixkoPayPlugin())
+        bridge?.registerPluginInstance(FixkoKoledarPlugin())
     }
 }
 

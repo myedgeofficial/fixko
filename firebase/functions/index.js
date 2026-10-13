@@ -160,13 +160,51 @@ exports.odgovori = onCall(async (req) => {
     });
     t.set(kRef, { mojsterTel: md.tel }, { merge: true });
     t.update(pRef, { status: "sprejeto" });
-    ostale.docs.filter((x) => x.id !== pRef.id && x.data().status === "caka").forEach((x) => t.update(x.ref, { status: "zavrnjeno" }));
+    // Druge ponudbe počakajo: če termin odpade, se stranki spet pokažejo.
+    ostale.docs.filter((x) => x.id !== pRef.id && x.data().status === "caka").forEach((x) => t.update(x.ref, { status: "odlozeno" }));
     return { delo: d.data(), md };
   });
   if (sprejmi && md.push) {
     await sendApns([md.push], "Stranka vas je izbrala", (delo.opis || strokaIme(delo.stroka)) + ", " + delo.kraj + ". Pokličite stranko.", { vloga: "M", delo: id });
   }
   return { ok: true, tel: sprejmi ? md.tel || "" : "" };
+});
+
+// Odpoved termina: stranka ali mojster. Delo se znova odpre (stranki ga ni treba objaviti znova),
+// odložene ponudbe drugih mojstrov se vrnejo. Stranka lahko z "celo" prekliče celo naročilo.
+exports.odpovej = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const id = String(req.data?.id || ""), celo = req.data?.celo === true;
+  const dRef = db.doc("dela/" + id), kRef = db.doc("dela/" + id + "/zasebno/kontakt");
+  const vse = await db.collection("ponudbe").where("delo", "==", id).get();
+  const r = await db.runTransaction(async (t) => {
+    const [d, k] = await Promise.all([t.get(dRef), t.get(kRef)]);
+    if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
+    const dd = d.data();
+    const stranka = dd.lastnik === uid, mojster = dd.mojster && dd.mojster === uid;
+    if (!stranka && !mojster) throw new HttpsError("permission-denied", "To ni vaše delo.");
+    if (dd.status !== "prevzeto" && !(stranka && celo && dd.status === "odprto")) throw new HttpsError("failed-precondition", "Termina ni mogoče odpovedati.");
+    const mRef = dd.mojster ? db.doc("mojstri/" + dd.mojster) : null;
+    const m = mRef ? await t.get(mRef) : null;
+    const izbrana = dd.mojster ? "ponudbe/" + id + "_" + dd.mojster : "";
+    for (const x of vse.docs) {
+      if (x.ref.path === izbrana) t.update(x.ref, { status: mojster ? "odpovedal" : "zavrnjeno" });
+      else if (x.data().status === "odlozeno" || (celo && x.data().status === "caka")) t.update(x.ref, { status: celo ? "zavrnjeno" : "caka" });
+    }
+    const brez = { mojster: FieldValue.delete(), mojsterIme: FieldValue.delete(), mojsterFirma: FieldValue.delete(), mojsterDavcna: FieldValue.delete(),
+      mojsterSlika: FieldValue.delete(), termin: FieldValue.delete(), cena: FieldValue.delete(), prevzeto: FieldValue.delete() };
+    t.update(dRef, { ...(dd.status === "prevzeto" ? brez : {}), status: celo && stranka ? "preklicano" : "odprto", odpovedano: FieldValue.serverTimestamp() });
+    if (k.exists) t.update(kRef, { mojsterTel: FieldValue.delete() });
+    return { dd, kontakt: k.exists ? k.data() : {}, md: m?.exists ? m.data() : {}, stranka, ostale: vse.docs.filter((x) => x.ref.path !== izbrana && x.data().status === "odlozeno").length };
+  });
+  const opis = r.dd.opis || strokaIme(r.dd.stroka);
+  if (r.stranka && r.dd.status === "prevzeto" && r.md.push) {
+    await sendApns([r.md.push], "Stranka je odpovedala termin", opis + ", " + r.dd.kraj + ".", { vloga: "M", delo: id });
+  } else if (!r.stranka && r.kontakt.push) {
+    await sendApns([r.kontakt.push], (r.md.ime || "Mojster") + " je odpovedal termin", opis + ". Naročilo je znova odprto" + (r.ostale ? ", izberete lahko drugega mojstra." : ", obvestili bomo druge mojstre."), { vloga: "N", delo: id });
+  }
+  return { ok: true };
 });
 
 /* ---------- naročnina ---------- */
