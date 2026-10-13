@@ -9,6 +9,7 @@ const sh = (c) => { try { return execSync(c, { encoding: "utf8" }); } catch (e) 
 const pocakaj = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = [];
 const ok = (ime, pogoj, vec = "") => { log.push(`${pogoj ? "OK  " : "NAPAKA"} ${ime}${vec ? " · " + vec : ""}`); console.log(log[log.length - 1]); };
+const nazaj = () => sh("adb shell input keyevent 4");
 const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'"));
 
 (async () => {
@@ -31,7 +32,8 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   // Stranka
   await p.click('.izbira[data-r="N"]');
   await p.waitForSelector("#opis");
-  await pocakaj(4000);
+  sh("adb emu geo fix 15.6459 46.5547");
+  await p.waitForFunction(() => !/Iščem/.test(document.getElementById("kraj")?.textContent || ""), null, { timeout: 25000 }).catch(() => {});
   await slika("03-stranka");
   ok("lokacija najde kraj", /Maribor/.test(await p.textContent("#kraj")), (await p.textContent("#kraj")).trim().replace(/\s+/g, " ").slice(0, 60));
   await p.fill("#opis", "Pušča pipa v kuhinji");
@@ -42,7 +44,7 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   // Pomoč + tipka Nazaj zapre okno
   await p.click("#pomoc"); await pocakaj(600);
   await slika("05-pomoc");
-  await d.press("Back"); await pocakaj(1200);
+  nazaj(); await pocakaj(1200);
   ok("Nazaj zapre okno", (await p.$$(".sheet")).length === 0 && spredaj());
 
   // Mojster
@@ -58,18 +60,18 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   const t = await p.waitForSelector(".toast", { timeout: 20000 }).then((e) => e.textContent()).catch(() => "");
   ok("obvestila vklopljena (FCM)", /vklopljena/.test(t), t.trim());
   await slika("08-obvestila");
-  await d.press("Back"); await pocakaj(800);
-  await d.press("Back"); await pocakaj(800);
+  nazaj(); await pocakaj(800);
+  nazaj(); await pocakaj(800);
 
   // Zasebnost: stran in nazaj
   await p.click("#nast"); await pocakaj(500);
   await p.click('a[href="zasebnost.html"]'); await pocakaj(2000);
   await slika("09-zasebnost");
-  await d.press("Back"); await pocakaj(2000);
+  nazaj(); await pocakaj(2000);
   ok("Nazaj iz zasebnosti v aplikacijo", spredaj() && /index\.html|\/$/.test(p.url()), p.url());
 
   // Nazaj na glavnem zaslonu skrije aplikacijo
-  await d.press("Back"); await pocakaj(1000);
+  nazaj(); await pocakaj(1000);
   ok("Nazaj na glavnem zaslonu skrije aplikacijo", !spredaj());
 
   // Ponovni zagon: vloga ostane
