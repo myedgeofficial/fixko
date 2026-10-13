@@ -7,10 +7,6 @@
   --oglas:0px;
   color-scheme:light;
 }
-@media (prefers-color-scheme: dark){:root{
-  --bg:#101614; --surface:#18211E; --ink:#E9EFED; --muted:#A0ADA9; --line:#2A3531;
-  --accent:#7DBFAE; --accent-ink:#0C1412; --accent-soft:#1D2E29; --ok:#6CC28F; --warn:#E3A85C; --danger:#F08A80;
-  --shadow:none; color-scheme:dark}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:19px;line-height:1.45;-webkit-text-size-adjust:100%}
 body{padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + var(--oglas))}
@@ -109,7 +105,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 
 /* ---------- 2026-10-12: lepši videz in vodenje ---------- */
 :root{--warm:#E8A33D;--warm-soft:#FBF0DE}
-@media (prefers-color-scheme: dark){:root{--warm:#F0B860;--warm-soft:#2E2618}}
 .hdr-btn{display:flex;align-items:center;gap:2px}
 .gear.pomoc{width:auto;padding:0 12px;gap:6px;display:flex;align-items:center;font:600 16px var(--body);color:var(--accent);background:var(--accent-soft);height:42px;border-radius:999px;margin-right:4px}
 .uvod{text-align:center;padding:10px 0 4px}
@@ -152,3 +147,21 @@ h2.prvi{margin-top:4px}
 .empty svg{color:var(--accent)}
 .empty b{color:var(--ink);font-size:19px}
 #kraj .najdeno{margin-top:14px}
+.neobv{font-weight:400;font-size:15px;color:var(--muted);margin-left:6px}
+#kdaj,#doma,#budget{margin-top:4px}
+.ponudba{border:1.5px solid var(--accent);border-radius:16px;padding:12px;margin-top:12px;background:var(--surface)}
+.ponudba .mojster{margin-top:0}
+.pogoj{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-top:8px;font-size:17px}
+.pogoj span{color:var(--muted)}
+.pogoj b{text-align:right}
+.ponudba .row .btn{flex:1}
+.btn.ghost svg{vertical-align:-5px;margin-right:4px}
+.vec{display:flex;gap:6px;padding:6px;overflow-x:auto;background:var(--accent-soft)}
+.vec img{width:84px;height:84px;object-fit:cover;border-radius:10px;flex:none}
+.prosnja{display:flex;gap:12px;align-items:flex-start;margin-top:14px;background:var(--warm-soft);border-radius:14px;padding:12px 14px;color:var(--ink)}
+.prosnja svg{color:var(--warm);flex:none;margin-top:2px}
+.prosnja b{display:block;font-size:18px}
+.prosnja span{display:block;font-size:16px;color:var(--muted)}
+label.btn{cursor:pointer}
+label.btn svg{vertical-align:-5px;margin-right:4px}
+.link svg{vertical-align:-3px}

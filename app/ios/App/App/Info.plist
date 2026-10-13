@@ -46,6 +46,8 @@
 	<string>Fixko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Fixko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Fixko uporabi kamero, da poslikaš, kaj je treba popraviti.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
