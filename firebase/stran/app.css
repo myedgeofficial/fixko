@@ -106,3 +106,49 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .mojster span{display:block;font-size:16px}
 .mojster small{display:block;color:var(--muted);font-size:14px}
 .link.muted{color:var(--muted);font-weight:500;font-size:15px}
+
+/* ---------- 2026-10-12: lepši videz in vodenje ---------- */
+:root{--warm:#E8A33D;--warm-soft:#FBF0DE}
+@media (prefers-color-scheme: dark){:root{--warm:#F0B860;--warm-soft:#2E2618}}
+.hdr-btn{display:flex;align-items:center;gap:2px}
+.gear.pomoc{width:auto;padding:0 12px;gap:6px;display:flex;align-items:center;font:600 16px var(--body);color:var(--accent);background:var(--accent-soft);height:42px;border-radius:999px;margin-right:4px}
+.uvod{text-align:center;padding:10px 0 4px}
+.uvod img{border-radius:22px;box-shadow:0 6px 24px rgba(22,32,29,.15)}
+.uvod h1{font-size:32px;margin:18px 0 10px}
+.uvod .lead{font-size:19px}
+.koraki{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:12px}
+.koraki li{display:flex;gap:14px;align-items:center;background:var(--surface);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow)}
+.koraki .kn{position:relative;flex:none;width:52px;height:52px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+.koraki .kn i{position:absolute;top:-4px;right:-4px;width:22px;height:22px;border-radius:50%;background:var(--warm);color:#2B1D05;font:700 13px/22px var(--body);text-align:center;font-style:normal}
+.koraki b{display:block;font-size:18px}
+.koraki small{display:block;color:var(--muted);font-size:16px;line-height:1.35}
+.sheet .koraki li{box-shadow:none;border:1px solid var(--line)}
+h2.kdo{text-align:center;margin-top:30px}
+.izbira{display:flex;align-items:center;gap:16px;width:100%;text-align:left;border:2px solid var(--accent);background:var(--surface);color:var(--ink);border-radius:20px;padding:18px;margin-top:12px;font:inherit;box-shadow:var(--shadow)}
+.izbira:first-of-type{background:var(--accent);color:var(--accent-ink)}
+.izbira>span{flex:none;width:62px;height:62px;border-radius:16px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.izbira:first-of-type>span{background:rgba(255,255,255,.16);color:var(--accent-ink)}
+.izbira b{display:block;font:700 22px var(--display)}
+.izbira small{display:block;font-size:16px;opacity:.85}
+.korak{display:flex;align-items:center;gap:10px;font:700 19px var(--display);margin:30px 0 12px}
+.korak span{width:32px;height:32px;border-radius:50%;background:var(--warm);color:#2B1D05;display:grid;place-items:center;font-size:17px;flex:none}
+form .korak:first-child{margin-top:4px}
+h2.prvi{margin-top:4px}
+.najdeno .ik{flex:none;width:46px;height:46px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+.najdeno + .najdeno,#stroka:not(:empty) + #kraj .najdeno{margin-top:10px}
+.ikchip{display:flex;align-items:center;gap:10px;color:var(--ink)}
+.ikchip svg{color:var(--accent);flex:none}
+.ikchip span{line-height:1.2}
+.shot svg{margin-bottom:6px}
+.tag{display:inline-flex;align-items:center;gap:6px}
+.pot{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);margin:14px 0 4px;padding:0;position:relative;font-size:14px;color:var(--muted);text-align:center}
+.pot li{position:relative;display:grid;justify-items:center;gap:6px}
+.pot li span{width:26px;height:26px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:grid;place-items:center;color:var(--accent-ink);position:relative;z-index:1}
+.pot li:not(:first-child)::before{content:"";position:absolute;top:12px;right:50%;width:100%;height:3px;background:var(--line)}
+.pot li.da span{background:var(--accent);border-color:var(--accent)}
+.pot li.da:not(:first-child)::before{background:var(--accent)}
+.pot li.zdaj{color:var(--ink);font-weight:700}
+.empty{display:grid;justify-items:center;gap:6px;padding:26px 18px;font-size:17px}
+.empty svg{color:var(--accent)}
+.empty b{color:var(--ink);font-size:19px}
+#kraj .najdeno{margin-top:14px}
