@@ -39,3 +39,10 @@ test("davčna številka", () => {
   assert.equal(veljavnaDavcna("1234567"), false);
   assert.equal(veljavnaDavcna("01234567"), false);
 });
+
+test("testna firma sme brez davčne", async () => {
+  const { testnaFirma } = await import("../src/data.js");
+  assert.ok(testnaFirma("Mirko Šraufnciger s.p."));
+  assert.ok(testnaFirma("mirko sraufnciger"));
+  assert.ok(!testnaFirma("Kos inštalacije"));
+});

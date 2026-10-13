@@ -59,6 +59,11 @@ export function veljavenTel(t) {
   return /^[+\d][\d\s/-]*$/.test(String(t || "").trim()) && st.length >= 8 && st.length <= 15;
 }
 // Slovenska davčna številka: 8 števk, zadnja je kontrolna (modul 11, uteži 8..2). Sprejme tudi "SI 12345678".
+// Testni mojster (samo za preizkušanje lastnikov): sme brez davčne številke.
+const TESTNA_FIRMA = "mirkosraufnciger";
+export function testnaFirma(f) {
+  return String(f || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "").includes(TESTNA_FIRMA);
+}
 export function veljavnaDavcna(v) {
   const s = String(v || "").toUpperCase().replace(/^SI/, "").replace(/\s/g, "");
   if (!/^[1-9]\d{7}$/.test(s)) return false;

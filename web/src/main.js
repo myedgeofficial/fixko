@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { STROKE, REGIJE, KDAJ, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, POGOJI_VERZIJA } from "./data.js";
+import { STROKE, REGIJE, KDAJ, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA } from "./data.js";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 import { ikona } from "./ikone.js";
 
@@ -315,7 +315,7 @@ function renderM() {
   view.querySelectorAll("[data-take]").forEach((b) => (b.onclick = () => takeSheet(prosta.find((j) => j.id === b.dataset.take))));
   view.querySelectorAll("[data-prijavi]").forEach((b) => (b.onclick = () => prijaviSheet({ delo: b.dataset.prijavi, kdo: "objava" })));
 }
-const profilPopoln = (m) => !!(m && m.slika && m.firma && m.davcna && m.pogoji === POGOJI_VERZIJA);
+const profilPopoln = (m) => !!(m && m.slika && m.firma && (m.davcna || testnaFirma(m.firma)) && m.pogoji === POGOJI_VERZIJA);
 function cardM(j) {
   const nov = !S.seen.has(j.id) && j.ustvarjeno && Date.now() - j.ustvarjeno.toMillis() < 3600e3;
   return `<div class="job">${pic(j)}<div class="body">${tag(j.stroka)}${nov ? '<span class="new">Novo</span>' : ""}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
@@ -380,7 +380,8 @@ function renderProfil() {
       if (!novaSlika && !m.slika) return err("Dodaj svojo sliko. Stranke raje odprejo vrata nekomu, ki ga prepoznajo.");
       if (m.ime.trim().split(/\s+/).length < 2) return err("Vpiši ime in priimek.");
       if (m.firma.trim().length < 3) return err("Vpiši ime podjetja, kot je v poslovnem registru.");
-      if (!veljavnaDavcna(m.davcna)) return err("Davčna številka ni pravilna. Ima 8 števk, npr. 12345678.");
+      const brezDavcne = testnaFirma(m.firma) && !m.davcna.trim();
+      if (!brezDavcne && !veljavnaDavcna(m.davcna)) return err("Davčna številka ni pravilna. Ima 8 števk, npr. 12345678.");
       if (!veljavenTel(m.tel)) return err("Vpiši telefonsko številko, npr. 041 123 456.");
       if (!sel.stroke.size) return err("Izberi vsaj eno stroko.");
       if (!sel.regije.size) return err("Izberi, kje delaš.");
@@ -395,7 +396,7 @@ function renderProfil() {
         }
         const push = await enablePush();
         const data = {
-          ime: m.ime.trim().replace(/\s+/g, " ").slice(0, 60), firma: m.firma.trim().replace(/\s+/g, " ").slice(0, 80), davcna: cistaDavcna(m.davcna),
+          ime: m.ime.trim().replace(/\s+/g, " ").slice(0, 60), firma: m.firma.trim().replace(/\s+/g, " ").slice(0, 80), davcna: brezDavcne ? "" : cistaDavcna(m.davcna),
           slika: slikaUrl, tel: m.tel.trim(), stroke: [...sel.stroke], regije: [...sel.regije], pogoji: POGOJI_VERZIJA, posodobljeno: serverTimestamp()
         };
         if (push) data.push = push;

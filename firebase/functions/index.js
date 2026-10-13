@@ -10,7 +10,7 @@ const admin = require("firebase-admin");
 const { Timestamp, FieldValue } = require("firebase-admin/firestore");
 const http2 = require("http2");
 const crypto = require("crypto");
-const { opisTermina, strokaIme, veljavnaDavcna } = require("./besedila");
+const { opisTermina, strokaIme, veljavnaDavcna, testnaFirma } = require("./besedila");
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
@@ -87,7 +87,7 @@ exports.prevzemi = onCall(async (req) => {
     const [m, d, k] = await Promise.all([t.get(mRef), t.get(dRef), t.get(kRef)]);
     if (!m.exists || !(m.data().narocninaDo?.toMillis() > Date.now())) throw new HttpsError("permission-denied", "Naročnina ni aktivna.");
     const md = m.data();
-    if (!md.slika || !md.firma || !veljavnaDavcna(md.davcna) || !md.pogoji) throw new HttpsError("failed-precondition", "Dopolni profil: slika, podjetje in davčna številka.");
+    if (!md.slika || !md.firma || !(veljavnaDavcna(md.davcna) || testnaFirma(md.firma)) || !md.pogoji) throw new HttpsError("failed-precondition", "Dopolni profil: slika, podjetje in davčna številka.");
     if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
     if (d.data().status !== "odprto") throw new HttpsError("already-exists", "Delo je že prevzeto.");
     if (d.data().lastnik === uid) throw new HttpsError("failed-precondition", "Svojega dela ne moreš prevzeti.");

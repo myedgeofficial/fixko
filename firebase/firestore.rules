@@ -67,7 +67,7 @@ service cloud.firestore {
     function profil(d) {
       return besedilo(d.ime, 60) && besedilo(d.tel, 20)
         && (!('firma' in d) || besedilo(d.firma, 80))
-        && (!('davcna' in d) || (d.davcna is string && d.davcna.matches('[1-9][0-9]{7}')))
+        && (!('davcna' in d) || (d.davcna is string && (d.davcna.matches('[1-9][0-9]{7}') || d.davcna == '')))
         && (!('slika' in d) || (besedilo(d.slika, 600) && d.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*')))
         && (!('pogoji' in d) || besedilo(d.pogoji, 20));
     }

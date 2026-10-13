@@ -21,6 +21,11 @@ function opisTermina(ms, now = Date.now()) {
   return `${t.dt}. ${t.mes}. ob ${t.ura}`;
 }
 // Slovenska davčna številka: 8 števk, kontrolna števka po modulu 11 (enako kot v aplikaciji).
+// Testni mojster (samo za preizkušanje lastnikov): sme brez davčne številke.
+const TESTNA_FIRMA = "mirkosraufnciger";
+function testnaFirma(f) {
+  return String(f || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "").includes(TESTNA_FIRMA);
+}
 function veljavnaDavcna(v) {
   const s = String(v || "");
   if (!/^[1-9]\d{7}$/.test(s)) return false;
@@ -32,4 +37,4 @@ function veljavnaDavcna(v) {
   return k === Number(s[7]);
 }
 
-module.exports = { opisTermina, strokaIme, veljavnaDavcna };
+module.exports = { opisTermina, strokaIme, veljavnaDavcna, testnaFirma };
