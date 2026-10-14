@@ -56,11 +56,11 @@ if AKCIJA == "stanje":
         print("VERZIJA", v["id"], json.dumps(v["attributes"]))
         for l in get(f"/appStoreVersions/{v['id']}/appStoreVersionLocalizations")["data"]:
             print("  VERLOC", l["id"], json.dumps(l["attributes"], ensure_ascii=False)[:300])
-        print("  BUILD", json.dumps(get(f"/appStoreVersions/{v['id']}/build").get("data")))
+        print("  BUILD", ((get(f"/appStoreVersions/{v['id']}/build").get("data") or {}).get("attributes") or {}).get("version"))
         print("  REVIEW", json.dumps(get(f"/appStoreVersions/{v['id']}/appStoreReviewDetail").get("data")))
     for b in get("/builds", **{"filter[app]": AID, "sort": "-uploadedDate", "limit": 5})["data"]:
         print("BUILDS", b["id"], b["attributes"]["version"], b["attributes"]["processingState"], b["attributes"].get("expired"))
-    print("CENA", json.dumps(get(f"/apps/{AID}/appPriceSchedule").get("data")))
+    print("CENA", len(get(f"/apps/{AID}/appPriceSchedule/manualPrices")["data"]))
     print("SUBMISSIONS", json.dumps([s["attributes"] for s in get("/reviewSubmissions", **{"filter[app]": AID})["data"]]))
     print("SUBGROUPS", json.dumps([g["attributes"] for g in get(f"/apps/{AID}/subscriptionGroups")["data"]]))
 
