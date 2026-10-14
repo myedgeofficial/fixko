@@ -37,4 +37,12 @@ function veljavnaDavcna(v) {
   return k === Number(s[7]);
 }
 
-module.exports = { opisTermina, strokaIme, veljavnaDavcna, testnaFirma };
+// Sklic za potrditveno nakazilo 0,01 €: SI00 + 8 števk iz uid (enako kot v aplikaciji).
+function sklicIz(uid) {
+  let h = 2166136261;
+  for (const c of String(uid)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return "SI00 " + String(h % 1e8).padStart(8, "0");
+}
+// Mojster je preverjen, če je potrdil nakazilo s TRR podjetja s to davčno (ali je testni račun).
+const jePreverjen = (m) => !!m && (testnaFirma(m.firma) || (!!m.preverjeno && m.preverjeno.davcna === (m.davcna || "")));
+module.exports = { opisTermina, strokaIme, veljavnaDavcna, testnaFirma, sklicIz, jePreverjen };

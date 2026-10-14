@@ -82,3 +82,11 @@ export const cistaDavcna = (v) => String(v || "").toUpperCase().replace(/^SI/, "
 export const POGOJI_VERZIJA = "2026-10-12";
 // Zaenkrat je Fixko brezplačen za vse, tudi za mojstre (samo oglasna pasica). Naročnino vklopimo kasneje.
 export const BREZPLACNO = true;
+
+// Sklic za potrditveno nakazilo 0,01 € (enako kot na strežniku).
+export function sklicIz(uid) {
+  let h = 2166136261;
+  for (const c of String(uid)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return "SI00 " + String(h % 1e8).padStart(8, "0");
+}
+export const jePreverjen = (m) => !!m && (testnaFirma(m.firma) || (!!m.preverjeno && m.preverjeno.davcna === (m.davcna || "")));

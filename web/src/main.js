@@ -10,7 +10,8 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { STROKE, REGIJE, KDAJ, BUDGET, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA, BREZPLACNO } from "./data.js";
+import { STROKE, REGIJE, KDAJ, BUDGET, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA, BREZPLACNO, sklicIz, jePreverjen } from "./data.js";
+import QRCode from "qrcode";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 import { ikona } from "./ikone.js";
 
@@ -333,13 +334,14 @@ function cardN(j) {
     ${pon && j.status === "odprto" ? `<span class="znacka">${pon}</span>` : j.prosnja && j.status !== "opravljeno" ? `<span class="znacka">!</span>` : ""}<span class="pusc">›</span></button>`;
 }
 // Podrobnosti naročila (v oknu).
+const preverjenoZnak = `<em class="prev">${ikona("kljukica", 14, 3)} Podjetje preverjeno</em>`;
 function detN(j) {
   const k = S.kontakti[j.id] || {};
   let st;
   if (j.status === "opravljeno") st = `<div class="status"><span class="dot off"></span>Opravljeno</div>`;
   else if (j.status === "preklicano") st = `<div class="status"><span class="dot off"></span>Preklicano</div>`;
   else if (j.status === "prevzeto") st = `<div class="status"><span class="dot ok"></span>Mojster pride ${esc(opisTermina(j.termin))}</div>
-    <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}</div></div>
+    <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}${j.mojsterPreverjen ? preverjenoZnak : ""}</div></div>
     ${k.mojsterTel ? `<div class="row"><span class="phone">${esc(k.mojsterTel)}</span><a class="btn small" href="tel:${esc(k.mojsterTel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
     <button class="btn ghost" type="button" data-done="${j.id}">Delo je opravljeno</button>
@@ -348,7 +350,7 @@ function detN(j) {
   else {
     const pon = S.ponudbe.filter((p) => p.delo === j.id && p.status === "caka");
     st = (pon.length ? `<div class="status"><span class="dot ok"></span>${pon.length === 1 ? "Javil se je mojster. Potrdite ga ali zavrnite." : `Javilo se je ${mojstrov(pon.length).replace("mojstre", "mojstrov")}. Izberite enega.`}</div>
-      ${pon.map((p) => `<div class="ponudba"><div class="mojster">${p.slika ? `<img src="${esc(p.slika)}" alt="">` : ""}<div><b>${esc(p.ime)}</b><span>${esc(p.firma)}</span>${p.davcna ? `<small>Davčna številka ${esc(p.davcna)}</small>` : ""}</div></div>
+      ${pon.map((p) => `<div class="ponudba"><div class="mojster">${p.slika ? `<img src="${esc(p.slika)}" alt="">` : ""}<div><b>${esc(p.ime)}</b><span>${esc(p.firma)}</span>${p.davcna ? `<small>Davčna številka ${esc(p.davcna)}</small>` : ""}${p.preverjen ? preverjenoZnak : ""}</div></div>
         <div class="pogoj"><span>Lahko pride</span><b>${esc(opisTermina(p.termin))}</b></div>${p.cena ? `<div class="pogoj"><span>Okvirna cena</span><b>${esc(p.cena)}</b></div>` : ""}
         <div class="row"><button class="btn small" type="button" data-sprejmi="${j.id}" data-m="${esc(p.mojster)}">Sprejmi</button><button class="btn small ghost" type="button" data-zavrni="${j.id}" data-m="${esc(p.mojster)}">Zavrni</button></div></div>`).join("")}`
       : `<div class="status"><span class="dot"></span>${j.obvesceni ? `Obvestili smo ${mojstrov(j.obvesceni)}, čakamo, da se kdo javi ...` : "Čakamo, da se javi mojster ..."}</div>`)
@@ -440,6 +442,7 @@ function renderM() {
   <h2 class="mali">Prosta dela</h2>
   <div class="feed">${prosta.length ? prosta.map(postM).join("") : `<div class="empty">${ikona("orodje", 40, 1.5)}<b>Trenutno ni prostih del</b>Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo.</div>`}</div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
+  document.getElementById("potrdiPodj")?.addEventListener("click", preveriSheet);
   vezi(view); osveziDet();
 }
 // Moj profil na vrhu strani mojstra: slika, ime, podjetje, stroke in kje dela.
@@ -451,6 +454,8 @@ function profilKartica(m, terminov) {
       <button class="uredi" id="edit" type="button">Uredi</button></div>
     <div class="ps">${(m.stroke || []).map((k) => `<span>${ikona(k, 18, 2)}${esc(strokaIme(k))}</span>`).join("")}</div>
     <div class="pr">${ikona("pin", 18, 2)}<span>${esc(reg)}</span></div>
+    ${jePreverjen(m) ? `<div class="prev">${ikona("kljukica", 16, 3)} Podjetje preverjeno</div>`
+      : S.placilo?.iban ? `<button class="potrdi" type="button" id="potrdiPodj">${ikona("kljukica", 20, 2.4)}<div><b>${m.preverjanje?.cakam ? "Čakamo na tvoje nakazilo" : "Potrdi podjetje"}</b><small>${m.preverjanje?.cakam ? "Ko ga vidimo, te potrdimo in se lahko javljaš." : m.preverjanje?.zavrnjeno ? "Nakazila nismo našli. Poskusi znova." : "Nakaži 0,01 € s TRR podjetja, da se lahko javljaš na dela."}</small></div><span class="pusc">›</span></button>` : ""}
     <div class="pst"><div><b>${prostaDela().length}</b><small>prostih del</small></div><div><b>${terminov}</b><small>${terminov === 1 ? "termin" : terminov === 2 ? "termina" : terminov === 3 || terminov === 4 ? "termini" : "terminov"}</small></div><div><b>${Object.values(S.moje).filter((p) => p.status === "caka").length}</b><small>čaka na stranko</small></div></div>
   </section>`;
 }
@@ -528,7 +533,7 @@ function vezi(root) {
   na("[data-zamenjaj]", (b) => potrdiSheet("Zamenjam mojstra?", "Temu mojstru odpoveste termin. Naročilo ostane objavljeno, druge ponudbe se vrnejo in izberete lahko drugega mojstra.", "Da, zamenjaj", () => odpovej(b.dataset.zamenjaj, false)));
   na("[data-koledar]", (b) => vKoledar(vsaDela(b.dataset.koledar), prefs.role));
   na("[data-prijavim]", (b) => prijaviSheet({ delo: b.dataset.prijavim, kdo: "mojster" }));
-  na("[data-take]", (b) => takeSheet(vsaDela(b.dataset.take)));
+  na("[data-take]", (b) => (S.placilo?.iban && !jePreverjen(S.mojster) ? preveriSheet() : takeSheet(vsaDela(b.dataset.take))));
   na("[data-slike]", (b) => prosiSheet(b.dataset.slike));
   na("[data-odpovem]", (b) => potrdiSheet("Odpovem termin?", "Stranka dobi obvestilo, delo pa se znova odpre za druge mojstre. Za to delo se ne moreš več javiti.", "Da, odpovej", () => odpovej(b.dataset.odpovem, false)));
   na("[data-prijavi]", (b) => prijaviSheet({ delo: b.dataset.prijavi, kdo: "objava" }));
@@ -750,6 +755,8 @@ function takeSheet(j) {
 }
 let feedUnsub = null, feedKey = "";
 function watchMojster() {
+  // Račun za potrditveno nakazilo; dokler ni vpisan, potrditev podjetja ni potrebna.
+  unsub.push(onSnapshot(doc(db, "nastavitve", "placilo"), (d) => { S.placilo = d.data() || null; if (prefs.role === "M" && !document.activeElement?.matches("input,select,textarea")) renderM(); }, () => {}));
   unsub.push(onSnapshot(doc(db, "mojstri", uid), (d) => {
     S.mojster = d.exists() ? d.data() : null;
     const key = aktiven() ? (S.mojster.stroke || []).slice(0, 30).join(",") : "";
@@ -806,10 +813,12 @@ function settingsSheet() {
     <a class="btn ghost" href="zasebnost.html">Zasebnost in pogoji</a>
     <button class="btn danger" type="button" id="del">Izbriši moje podatke</button>
     <div id="potrdi" hidden><p>Izbrišemo tvoj profil, tvoja dela in slike. Naročnino v App Store prekličeš posebej. Tega ni mogoče razveljaviti.</p><button class="btn danger" type="button" id="del2">Da, izbriši vse</button></div>
-    <button class="btn" type="button" id="x">Zapri</button></div>`;
+    <button class="btn" type="button" id="x">Zapri</button>
+    <p class="note"><button class="link muted" type="button" id="skrb">Za skrbnike</button></p></div>`;
   document.body.appendChild(d);
   d.onclick = (e) => { if (e.target === d) d.remove(); };
   d.querySelector("#x").onclick = () => d.remove();
+  d.querySelector("#skrb").onclick = () => { d.remove(); skrbnikSheet(); };
   d.querySelector("#prof")?.addEventListener("click", () => { d.remove(); S.urejam = true; setRole("M"); });
   d.querySelector("#man")?.addEventListener("click", () => FixkoPay.manage().catch(() => {}));
   d.querySelector("#obv").onclick = async () => {
@@ -824,6 +833,68 @@ function settingsSheet() {
     try { await Preferences.remove({ key: "fixko" }); } catch (e) {}
     location.reload();
   };
+}
+
+/* ---------- potrditev podjetja z nakazilom 0,01 € ---------- */
+// UPN QR (standard ZBS): 19 polj, vsako v svoji vrstici, nato dolžina; samo ASCII, da ni težav s kodiranjem.
+const ascii = (t, n) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\x20-\x7E]/g, "").slice(0, n);
+function upnQr(pl, sklic) {
+  const rok = new Date(Date.now() + 7 * 864e5);
+  const polja = ["UPNQR", "", "", "", "", "", "", "", "00000000001", "", "", "OTHR", ascii("Potrditev podjetja Fixko", 42),
+    `${String(rok.getDate()).padStart(2, "0")}.${String(rok.getMonth() + 1).padStart(2, "0")}.${rok.getFullYear()}`,
+    pl.iban.replace(/\s/g, ""), sklic.replace(/\s/g, ""), ascii(pl.prejemnik, 33), ascii(pl.ulica, 33), ascii(pl.kraj, 33)];
+  const besedilo = polja.join("\n") + "\n";
+  return besedilo + String(besedilo.length).padStart(3, "0") + "\n";
+}
+async function preveriSheet() {
+  const pl = S.placilo; if (!pl?.iban) return;
+  const m = S.mojster || {}, sklic = sklicIz(uid);
+  const d = document.createElement("div"); d.className = "sheet";
+  const vrstica = (n, v) => `<div class="pogoj kopiraj" data-kopiraj="${esc(v)}"><span>${n}</span><b>${esc(v)}</b></div>`;
+  d.innerHTML = `<div role="dialog" aria-label="Potrdi podjetje"><h2 style="margin-top:0">Potrdi podjetje</h2>
+    <p class="lead">Nakaži <b>0,01 €</b> s TRR podjetja <b>${esc(m.firma)}</b>. Tako stranke vedo, da je podjetje res tvoje. Nakaži lahko tudi ob vikendu: izberi takojšnje plačilo.</p>
+    <div class="qr"><canvas id="qr"></canvas><small>Skeniraj v svoji banki (UPN QR)</small></div>
+    ${vrstica("Prejemnik", pl.prejemnik)}${vrstica("IBAN", pl.iban)}${vrstica("Znesek", "0,01 €")}${vrstica("Sklic", sklic)}${vrstica("Namen", "Potrditev podjetja Fixko")}
+    <p class="hint">Tapni vrstico, da jo kopiraš. Pomembno: nakaži z računa podjetja, ne z osebnega, in s pravim sklicem.</p>
+    <div class="err" id="perr" hidden></div>
+    <button class="btn" type="button" id="ok">${m.preverjanje?.cakam ? "Nakazal sem znova" : "Nakazal sem"}</button></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  QRCode.toCanvas(d.querySelector("#qr"), [{ data: new TextEncoder().encode(upnQr(pl, sklic)), mode: "byte" }], { version: 15, errorCorrectionLevel: "M", margin: 2, width: 240 }).catch((e) => { console.error(e); d.querySelector(".qr").hidden = true; });
+  d.querySelectorAll("[data-kopiraj]").forEach((r) => (r.onclick = () => { navigator.clipboard?.writeText(r.dataset.kopiraj.replace(" €", "")).then(() => toast("Kopirano", r.dataset.kopiraj)).catch(() => {}); }));
+  d.querySelector("#ok").onclick = async () => {
+    const b = d.querySelector("#ok"); b.disabled = true;
+    try { await call("nakazal", {}); d.remove(); toast("Hvala", "Ko vidimo nakazilo, te potrdimo in dobiš obvestilo. Običajno v enem dnevu."); }
+    catch (e) { b.disabled = false; const t = d.querySelector("#perr"); t.hidden = false; t.textContent = e.message || "Ni uspelo."; }
+  };
+}
+// Skrbnik (Urška, Teo): seznam mojstrov, ki so nakazali; na izpisku preveri sklic in da je TRR podjetja s to davčno.
+async function skrbnikSheet() {
+  const d = document.createElement("div"); d.className = "sheet";
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  const prijava = (napaka) => {
+    d.innerHTML = `<div role="dialog" aria-label="Skrbnik"><h2 style="margin-top:0">Za skrbnike</h2><input id="koda" type="password" placeholder="Koda skrbnika" autocomplete="off">
+      ${napaka ? `<div class="err">${esc(String(napaka).replace(/\s*\[\d+\]$/, ""))}</div>` : ""}<button class="btn" type="button" id="ok">Naprej</button></div>`;
+    d.querySelector("#ok").onclick = () => { prefs.skrbnik = d.querySelector("#koda").value.trim(); savePrefs(); seznam(); };
+  };
+  const seznam = async () => {
+    d.innerHTML = `<div role="dialog"><div class="spin">Nalagam ...</div></div>`;
+    let r;
+    try { r = await call("skrbnik", { koda: prefs.skrbnik, akcija: "seznam" }); } catch (e) { prefs.skrbnik = ""; savePrefs(); return prijava(e.message); }
+    d.innerHTML = `<div role="dialog" aria-label="Potrjevanje podjetij"><h2 style="margin-top:0">Potrjevanje podjetij</h2>
+      <p class="lead">Na izpisku poišči nakazilo 0,01 € s tem sklicem. Preveri, da je plačnik to podjetje (račun lahko preveriš v registru TRR na AJPES).</p>
+      ${r.mojstri.length ? r.mojstri.map((m) => `<div class="ponudba"><div class="mojster">${m.slika ? `<img src="${esc(m.slika)}" alt="">` : ""}<div><b>${esc(m.firma)}</b><span>${esc(m.ime)} · ${esc(m.tel)}</span><small>Davčna ${esc(m.davcna || "ni vpisana")}</small></div></div>
+        <div class="pogoj"><span>Sklic</span><b>${esc(m.sklic)}</b></div>
+        <div class="row"><button class="btn small" type="button" data-p="${m.uid}">Potrdi</button><button class="btn small ghost" type="button" data-z="${m.uid}">Ni nakazila</button></div></div>`).join("")
+        : `<div class="empty"><b>Ni čakajočih</b>Ko mojster nakaže in tapne »Nakazal sem«, se pokaže tukaj.</div>`}</div>`;
+    d.querySelectorAll("[data-p],[data-z]").forEach((b) => (b.onclick = async () => {
+      b.disabled = true;
+      try { await call("skrbnik", { koda: prefs.skrbnik, akcija: b.dataset.p ? "potrdi" : "zavrni", uid: b.dataset.p || b.dataset.z }); toast(b.dataset.p ? "Potrjeno" : "Zavrnjeno", "Mojster je dobil obvestilo."); seznam(); }
+      catch (e) { b.disabled = false; toast("Ni uspelo", e.message || ""); }
+    }));
+  };
+  prefs.skrbnik ? seznam() : prijava();
 }
 
 /* ---------- pomočniki ---------- */

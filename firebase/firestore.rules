@@ -100,6 +100,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Podatki za potrditveno nakazilo (IBAN, prejemnik). Piše samo strežnik.
+    match /nastavitve/placilo {
+      allow read: if prijavljen();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

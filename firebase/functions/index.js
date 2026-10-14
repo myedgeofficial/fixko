@@ -11,7 +11,7 @@ const admin = require("firebase-admin");
 const { Timestamp, FieldValue } = require("firebase-admin/firestore");
 const http2 = require("http2");
 const crypto = require("crypto");
-const { opisTermina, strokaIme, veljavnaDavcna, testnaFirma } = require("./besedila");
+const { opisTermina, strokaIme, veljavnaDavcna, testnaFirma, sklicIz, jePreverjen } = require("./besedila");
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
@@ -141,17 +141,20 @@ exports.ponudi = onCall(async (req) => {
   if (!id || !Number.isFinite(termin)) throw new HttpsError("invalid-argument", "Manjka delo ali termin.");
   if (termin < Date.now() - 3600e3 || termin > Date.now() + 15 * 864e5) throw new HttpsError("invalid-argument", "Termin ni veljaven.");
   const mRef = db.doc("mojstri/" + uid), dRef = db.doc("dela/" + id), pRef = db.doc("ponudbe/" + id + "_" + uid);
+  // Potrditev podjetja velja, ko je vpisan račun za nakazila (nastavitve/placilo.iban).
+  const zahtevaj = !!(await db.doc("nastavitve/placilo").get()).data()?.iban;
   const { delo, kontakt, md, nova } = await db.runTransaction(async (t) => {
     const [m, d, p, k] = await Promise.all([t.get(mRef), t.get(dRef), t.get(pRef), t.get(db.doc("dela/" + id + "/zasebno/kontakt"))]);
     if (!m.exists || !(m.data().narocninaDo?.toMillis() > Date.now())) throw new HttpsError("permission-denied", "Naročnina ni aktivna.");
     const md = m.data();
     if (!profilOk(md)) throw new HttpsError("failed-precondition", "Dopolni profil: slika, podjetje in davčna številka.");
+    if (zahtevaj && !jePreverjen(md)) throw new HttpsError("failed-precondition", "Najprej potrdi podjetje (nakazilo 0,01 €).");
     if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
     if (d.data().status !== "odprto") throw new HttpsError("already-exists", "Stranka je že izbrala mojstra.");
     if (d.data().lastnik === uid) throw new HttpsError("failed-precondition", "Svojega dela ne moreš prevzeti.");
     if (p.exists && p.data().status !== "caka") throw new HttpsError("failed-precondition", "Stranka je tvojo ponudbo že zavrnila.");
     t.set(pRef, {
-      delo: id, mojster: uid, lastnik: d.data().lastnik, ime: md.ime, firma: md.firma, davcna: md.davcna || "", slika: md.slika,
+      delo: id, mojster: uid, lastnik: d.data().lastnik, ime: md.ime, firma: md.firma, davcna: md.davcna || "", slika: md.slika, preverjen: jePreverjen(md),
       termin, cena, status: "caka", ustvarjeno: p.exists ? p.data().ustvarjeno : FieldValue.serverTimestamp(), posodobljeno: FieldValue.serverTimestamp()
     });
     if (!p.exists) t.update(dRef, { ponudb: FieldValue.increment(1) });
@@ -179,7 +182,7 @@ exports.odgovori = onCall(async (req) => {
     if (!m.exists) throw new HttpsError("not-found", "Mojster ne obstaja več.");
     const pd = p.data(), md = m.data();
     t.update(dRef, {
-      status: "prevzeto", mojster, mojsterIme: md.ime, mojsterFirma: md.firma, mojsterDavcna: md.davcna || "", mojsterSlika: md.slika,
+      status: "prevzeto", mojster, mojsterIme: md.ime, mojsterFirma: md.firma, mojsterDavcna: md.davcna || "", mojsterSlika: md.slika, mojsterPreverjen: jePreverjen(md),
       termin: pd.termin, cena: pd.cena || "", prevzeto: FieldValue.serverTimestamp()
     });
     t.set(kRef, { mojsterTel: md.tel }, { merge: true });
@@ -321,6 +324,49 @@ exports.narocnina = onCall(async (req) => {
     tx.update(mRef, { narocninaDo: Timestamp.fromMillis(doMs), transakcija: t.originalTransactionId });
   });
   return { do: doMs };
+});
+
+/* ---------- potrditev podjetja z nakazilom 0,01 € ---------- */
+// Mojster nakaže 0,01 € s TRR podjetja s sklicem iz aplikacije in tapne »Nakazal sem«.
+// Skrbnik na izpisku preveri, da račun pripada podjetju s to davčno (AJPES), in ga potrdi v aplikaciji.
+exports.nakazal = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const mRef = db.doc("mojstri/" + uid);
+  const m = await mRef.get();
+  if (!m.exists || !profilOk(m.data())) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
+  await mRef.update({ preverjanje: { cakam: true, sklic: sklicIz(uid), davcna: m.data().davcna || "", ob: FieldValue.serverTimestamp() } });
+  return { sklic: sklicIz(uid) };
+});
+
+// Skrbniški dostop s kodo; v bazi je samo njen SHA-256 (nastavitve/skrbnik.hash).
+async function skrbnik(koda) {
+  const h = (await db.doc("nastavitve/skrbnik").get()).data()?.hash;
+  const moj = crypto.createHash("sha256").update(String(koda || "")).digest("hex");
+  if (!h || h.length !== moj.length || !crypto.timingSafeEqual(Buffer.from(h), Buffer.from(moj))) throw new HttpsError("permission-denied", "Napačna koda.");
+}
+exports.skrbnik = onCall(async (req) => {
+  if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  await skrbnik(req.data?.koda);
+  const akcija = req.data?.akcija;
+  if (akcija === "seznam") {
+    const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();
+    return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), ob: m.preverjanje?.ob?.toMillis() || 0 }; }) };
+  }
+  if (akcija === "potrdi" || akcija === "zavrni") {
+    const mRef = db.doc("mojstri/" + String(req.data?.uid || ""));
+    const m = await mRef.get();
+    if (!m.exists) throw new HttpsError("not-found", "Mojstra ni.");
+    const md = m.data();
+    if (akcija === "potrdi") await mRef.update({ preverjeno: { davcna: md.davcna || "", ob: FieldValue.serverTimestamp() }, preverjanje: FieldValue.delete() });
+    else await mRef.update({ preverjanje: { cakam: false, zavrnjeno: true, sklic: sklicIz(m.id), ob: FieldValue.serverTimestamp() } });
+    if (md.push) {
+      await sendApns([md.push], akcija === "potrdi" ? "Podjetje je potrjeno" : "Nakazila nismo našli",
+        akcija === "potrdi" ? "Zdaj se lahko javljaš na dela." : "Preveri, da si nakazal s TRR podjetja in s pravim sklicem.", { vloga: "M" });
+    }
+    return { ok: true };
+  }
+  throw new HttpsError("invalid-argument", "Neznano dejanje.");
 });
 
 /* ---------- brisanje podatkov ---------- */
