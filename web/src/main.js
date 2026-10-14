@@ -103,15 +103,16 @@ document.getElementById("tabM").onclick = () => setRole("M");
 document.getElementById("nast").onclick = () => settingsSheet();
 document.getElementById("pomoc").onclick = () => pomocSheet();
 function setRole(r) { document.getElementById("det")?.remove(); prefs.role = r; prefs.uvod = true; savePrefs(); render(); window.scrollTo(0, 0); }
+const OGLASI = false;
 function render() {
   const uvod = !prefs.uvod;
   document.querySelector(".switch").hidden = uvod;
   if (uvod) { document.getElementById("oglas").hidden = true; document.body.classList.remove("z-oglasom"); if (!view.querySelector(".izbira")) renderUvod(); return; }
   document.getElementById("tabN").setAttribute("aria-pressed", prefs.role === "N");
   document.getElementById("tabM").setAttribute("aria-pressed", prefs.role === "M");
-  // Oglasna pasica samo pri strankah (mojstri plačujejo naročnino).
-  document.getElementById("oglas").hidden = false;
-  document.body.classList.add("z-oglasom");
+  // Oglasna pasica: prazen prostor bi Apple zavrnil, zato je skrita, dokler ni pravega oglasa (AdMob).
+  document.getElementById("oglas").hidden = !OGLASI;
+  document.body.classList.toggle("z-oglasom", OGLASI);
   prefs.role === "N" ? renderN() : renderM();
 }
 
