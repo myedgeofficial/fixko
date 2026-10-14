@@ -455,7 +455,7 @@ function profilKartica(m, terminov) {
     <div class="ps">${(m.stroke || []).map((k) => `<span>${ikona(k, 18, 2)}${esc(strokaIme(k))}</span>`).join("")}</div>
     <div class="pr">${ikona("pin", 18, 2)}<span>${esc(reg)}</span></div>
     ${jePreverjen(m) ? `<div class="prev">${ikona("kljukica", 16, 3)} Podjetje preverjeno</div>`
-      : S.placilo?.iban ? `<button class="potrdi" type="button" id="potrdiPodj">${ikona("kljukica", 20, 2.4)}<div><b>${m.preverjanje?.cakam ? "Čakamo na tvoje nakazilo" : "Potrdi podjetje"}</b><small>${m.preverjanje?.cakam ? "Ko ga vidimo, te potrdimo in se lahko javljaš." : m.preverjanje?.zavrnjeno ? "Nakazila nismo našli. Poskusi znova." : "Nakaži 0,01 € s TRR podjetja, da se lahko javljaš na dela."}</small></div><span class="pusc">›</span></button>` : ""}
+      : S.placilo?.iban ? `<button class="potrdi" type="button" id="potrdiPodj">${ikona("kljukica", 20, 2.4)}<div><b>${m.preverjanje?.cakam ? "Čakamo na tvoje nakazilo" : "Potrdi podjetje"}</b><small>${m.preverjanje?.cakam ? "Ko ga vidimo, te potrdimo in se lahko javljaš." : m.preverjanje?.zavrnjeno ? "Nakazila nismo našli. Poskusi znova." : "Enkratno nakazilo 1 centa s TRR podjetja dokaže, da je podjetje res tvoje. Potem se lahko javljaš na dela."}</small></div><span class="pusc">›</span></button>` : ""}
     <div class="pst"><div><b>${prostaDela().length}</b><small>prostih del</small></div><div><b>${terminov}</b><small>${terminov === 1 ? "termin" : terminov === 2 ? "termina" : terminov === 3 || terminov === 4 ? "termini" : "terminov"}</small></div><div><b>${Object.values(S.moje).filter((p) => p.status === "caka").length}</b><small>čaka na stranko</small></div></div>
   </section>`;
 }
@@ -852,10 +852,13 @@ async function preveriSheet() {
   const d = document.createElement("div"); d.className = "sheet";
   const vrstica = (n, v) => `<div class="pogoj kopiraj" data-kopiraj="${esc(v)}"><span>${n}</span><b>${esc(v)}</b></div>`;
   d.innerHTML = `<div role="dialog" aria-label="Potrdi podjetje"><h2 style="margin-top:0">Potrdi podjetje</h2>
-    <p class="lead">Nakaži <b>0,01 €</b> s TRR podjetja <b>${esc(m.firma)}</b>. Tako stranke vedo, da je podjetje res tvoje. Nakaži lahko tudi ob vikendu: izberi takojšnje plačilo.</p>
+    <div class="zakaj"><b>Zakaj 1 cent?</b>
+      <p>Davčno številko lahko vpiše kdorkoli, tudi tujo. Z računa podjetja pa lahko nakaže samo njegov lastnik. Ko na izpisku vidimo, da je cent prišel s TRR podjetja <b>${esc(m.firma)}</b>, vemo, da je podjetje res tvoje.</p>
+      <p>Tako stranke dobijo samo prave mojstre, ti pa oznako <b>»Podjetje preverjeno«</b>, ki ji stranke bolj zaupajo. To ni plačilo za Fixko, ampak samo enkratna potrditev.</p></div>
+    <p class="lead">Nakaži <b>0,01 €</b> z računa podjetja, ne z osebnega. Nakažeš lahko tudi ob vikendu, izberi takojšnje plačilo.</p>
     <div class="qr"><canvas id="qr"></canvas><small>Skeniraj v svoji banki (UPN QR)</small></div>
     ${vrstica("Prejemnik", pl.prejemnik)}${vrstica("IBAN", pl.iban)}${vrstica("Znesek", "0,01 €")}${vrstica("Sklic", sklic)}${vrstica("Namen", "Potrditev podjetja Fixko")}
-    <p class="hint">Tapni vrstico, da jo kopiraš. Pomembno: nakaži z računa podjetja, ne z osebnega, in s pravim sklicem.</p>
+    <p class="hint">Tapni vrstico, da jo kopiraš. Sklic je pomemben, po njem nakazilo povežemo s tvojim profilom.</p>
     <div class="err" id="perr" hidden></div>
     <button class="btn" type="button" id="ok">${m.preverjanje?.cakam ? "Nakazal sem znova" : "Nakazal sem"}</button></div>`;
   document.body.appendChild(d);
