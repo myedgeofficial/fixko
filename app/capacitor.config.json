@@ -1,6 +1,6 @@
 {
   "appId": "si.fixko.app",
-  "appName": "Fixko",
+  "appName": "Popravko",
   "webDir": "www",
   "ios": {
     "contentInset": "never",

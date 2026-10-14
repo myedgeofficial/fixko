@@ -1,4 +1,4 @@
-// Fixko strežnik:
+// Popravko strežnik:
 // - novoDelo: ko stranka odda delo, obvesti mojstre te stroke v tej regiji (z aktivno naročnino).
 // - ponudi / odgovori: mojster se javi s terminom, stranka ga sprejme ali zavrne; po sprejemu si izmenjata telefon.
 // - prevzemi: stari neposredni prevzem (za starejše gradnje).
@@ -20,7 +20,7 @@ const db = admin.firestore();
 const BUNDLE_ID = process.env.APNS_TOPIC || "si.fixko.app";
 const PRODUCT_ID = process.env.PRODUCT_ID || "si.fixko.app.mojster.mesecno";
 const PREIZKUS_DNI = 30;
-// Zaenkrat je Fixko brezplačen za vse mojstre (BREZPLACNO=0 vklopi naročnino).
+// Zaenkrat je Popravko brezplačen za vse mojstre (BREZPLACNO=0 vklopi naročnino).
 const BREZPLACNO = process.env.BREZPLACNO !== "0";
 
 /* ---------- obvestila (APNs, FCM) ---------- */
@@ -161,7 +161,7 @@ exports.ponudi = onCall(async (req) => {
     return { delo: d.data(), kontakt: k.exists ? k.data() : {}, md, nova: !p.exists };
   });
   if (nova && kontakt.push) {
-    await sendApns([kontakt.push], md.ime + " lahko pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Odprite Fixko in potrdite mojstra.", { vloga: "N", delo: id });
+    await sendApns([kontakt.push], md.ime + " lahko pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Odprite Popravko in potrdite mojstra.", { vloga: "N", delo: id });
   }
   return { ok: true };
 });
@@ -245,7 +245,7 @@ exports.prosiSlike = onCall(async (req) => {
   await d.ref.update({ prosnja: { ime: m.data().ime || "Mojster", sporocilo, cas: FieldValue.serverTimestamp() } });
   const k = await db.doc("dela/" + id + "/zasebno/kontakt").get();
   if (k.exists && k.data().push) {
-    await sendApns([k.data().push], (m.data().ime || "Mojster") + " prosi za več slik", sporocilo || (d.data().opis || strokaIme(d.data().stroka)) + ". Dodajte jih v Fixku.", { vloga: "N", delo: id });
+    await sendApns([k.data().push], (m.data().ime || "Mojster") + " prosi za več slik", sporocilo || (d.data().opis || strokaIme(d.data().stroka)) + ". Dodajte jih v Popravku.", { vloga: "N", delo: id });
   }
   return { ok: true };
 });

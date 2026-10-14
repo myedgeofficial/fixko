@@ -1,4 +1,4 @@
-"""Doda e-pošte kot interne testerje Fixka na TestFlightu (skupina "Ekipa", vsi buildi)."""
+"""Doda e-pošte kot interne testerje Popravka na TestFlightu (skupina "Ekipa", vsi buildi)."""
 import os, re, sys, textwrap, time
 import jwt, requests
 
@@ -40,11 +40,11 @@ else:
     det = call("GET", f"/apps/{app['id']}/betaAppReviewDetail").json()["data"]
     call("PATCH", f"/betaAppReviewDetails/{det['id']}", json={"data": {"type": "betaAppReviewDetails", "id": det["id"], "attributes": {
         **kontakt, "demoAccountRequired": False,
-        "notes": "Fixko connects people who need home repairs with local tradespeople. Customer: tap 'Rabim mojstra', take a photo or describe the job, send. Tradesperson: tap 'Sem mojster', fill in the profile, tap 'Začni preizkus' (free trial), take a job and pick a time. No login needed."}}})
+        "notes": "Popravko connects people who need home repairs with local tradespeople. Customer: tap 'Rabim mojstra', take a photo or describe the job, send. Tradesperson: tap 'Sem mojster', fill in the profile, tap 'Začni preizkus' (free trial), take a job and pick a time. No login needed."}}})
     print(f"::notice::Kontakt za pregled: {', '.join(kontakt) or 'MANJKA'}")
     feedback = kontakt.get("contactEmail", "")
-    opis = {"en-US": "Fixko connects people who need help at home with nearby tradespeople. Try it: post a job as a customer or take one as a tradesperson.",
-            "sl-SI": "Fixko poveže ljudi, ki doma rabijo pomoč, z mojstri v bližini. Preizkusi: pošlji delo kot stranka ali ga prevzemi kot mojster.",
+    opis = {"en-US": "Popravko connects people who need help at home with nearby tradespeople. Try it: post a job as a customer or take one as a tradesperson.",
+            "sl-SI": "Popravko poveže ljudi, ki doma rabijo pomoč, z mojstri v bližini. Preizkusi: pošlji delo kot stranka ali ga prevzemi kot mojster.",
 }
     lok = call("GET", f"/apps/{app['id']}/betaAppLocalizations").json()["data"]
     imam = {l["attributes"]["locale"]: l["id"] for l in lok}

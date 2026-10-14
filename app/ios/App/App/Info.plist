@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>sl</string>
 	<key>CFBundleDisplayName</key>
-	<string>Fixko</string>
+	<string>Popravko</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -33,25 +33,25 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Fixko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
+	<string>Popravko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Fixko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
+	<string>Popravko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Fixko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
+	<string>Popravko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>Fixko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
+	<string>Popravko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Fixko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
+	<string>Popravko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Fixko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
+	<string>Popravko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>Fixko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
+	<string>Popravko doda dogovorjen termin v vaš koledar in opomnike, da ga ne pozabite.</string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Fixko uporabi kamero, da poslikaš, kaj je treba popraviti.</string>
+	<string>Popravko uporabi kamero, da poslikaš, kaj je treba popraviti.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Fixko potrebuje dostop do slik, da mojstru pokažeš, kaj je treba popraviti.</string>
+	<string>Popravko potrebuje dostop do slik, da mojstru pokažeš, kaj je treba popraviti.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

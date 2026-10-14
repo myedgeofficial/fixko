@@ -80,7 +80,7 @@ export function veljavnaDavcna(v) {
 export const cistaDavcna = (v) => String(v || "").toUpperCase().replace(/^SI/, "").replace(/\s/g, "");
 // Verzija pogojev, ki jih mojster sprejme (ob spremembi pogojev jo povečaj, da jih sprejme znova).
 export const POGOJI_VERZIJA = "2026-10-12";
-// Zaenkrat je Fixko brezplačen za vse, tudi za mojstre (samo oglasna pasica). Naročnino vklopimo kasneje.
+// Zaenkrat je Popravko brezplačen za vse, tudi za mojstre (samo oglasna pasica). Naročnino vklopimo kasneje.
 export const BREZPLACNO = true;
 
 // Sklic za potrditveno nakazilo 0,01 € (enako kot na strežniku).

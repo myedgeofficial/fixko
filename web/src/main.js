@@ -125,9 +125,9 @@ const pic = (j) => {
 const opt = (list, sel, prazno) => (prazno ? `<option value="">${prazno}</option>` : "") + list.map(([k, n]) => `<option value="${k}"${k === sel ? " selected" : ""}>${n}</option>`).join("");
 
 /* =================== UVOD =================== */
-// Prvi zagon: kaj je Fixko in kdo ste, z dvema velikima gumboma.
+// Prvi zagon: kaj je Popravko in kdo ste, z dvema velikima gumboma.
 const KORAKI = {
-  N: [["kamera", "Fotografirajte ali opišite", "Kaj je narobe. Fixko sam ugotovi, kateri mojster je pravi."], ["telefon", "Mojster vas pokliče", "Dogovorite se za ceno in termin."], ["dom", "Mojster pride", "V aplikaciji vidite njegovo ime, sliko in podjetje."]],
+  N: [["kamera", "Fotografirajte ali opišite", "Kaj je narobe. Popravko sam ugotovi, kateri mojster je pravi."], ["telefon", "Mojster vas pokliče", "Dogovorite se za ceno in termin."], ["dom", "Mojster pride", "V aplikaciji vidite njegovo ime, sliko in podjetje."]],
   M: [["mojster", "Uredi profil", "Slika, podjetje, stroka in kje delaš."], ["kamera", "Dobiš obvestilo", "Ko nekdo v tvoji bližini rabi tvojo stroko."], ["telefon", "Prevzemi in pokliči", "Izbereš termin, stranka te pričakuje."]]
 };
 const koraki = (r) => `<ol class="koraki">${KORAKI[r].map(([ik, t, m], i) => `<li><span class="kn">${ikona(ik, 26)}<i>${i + 1}</i></span><div><b>${t}</b><small>${m}</small></div></li>`).join("")}</ol>`;
@@ -136,7 +136,7 @@ function renderUvod() {
   <div class="uvod">
     <img src="logo.png" width="88" height="88" alt="">
     <h1>Mojster na vašem domu</h1>
-    <p class="lead">Pipa pušča, luč ne gori, vrata škripajo? Fixko poišče mojstra v vaši bližini.</p>
+    <p class="lead">Pipa pušča, luč ne gori, vrata škripajo? Popravko poišče mojstra v vaši bližini.</p>
   </div>
   ${koraki("N")}
   <h2 class="kdo">Kdo ste?</h2>
@@ -149,7 +149,7 @@ function pomocSheet() {
   const d = document.createElement("div"); d.className = "sheet";
   d.innerHTML = `<div role="dialog" aria-label="Kako deluje"><h2 style="margin-top:0">Kako deluje</h2>
     ${koraki(r)}
-    ${r === "N" ? `<p class="lead">Ne veste, kateri mojster? Samo opišite težavo, Fixko izbere sam. Ne veste, kako napisati? Tapnite mikrofon na tipkovnici in povejte.</p>` : `<p class="lead">Stranka vidi tvojo sliko, ime, podjetje in davčno številko, zato ti lažje zaupa.</p>`}
+    ${r === "N" ? `<p class="lead">Ne veste, kateri mojster? Samo opišite težavo, Popravko izbere sam. Ne veste, kako napisati? Tapnite mikrofon na tipkovnici in povejte.</p>` : `<p class="lead">Stranka vidi tvojo sliko, ime, podjetje in davčno številko, zato ti lažje zaupa.</p>`}
     <p class="lead">Vprašanja: <a class="link" href="mailto:urska.repusic@gmail.com">urska.repusic@gmail.com</a></p>
     <button class="btn" type="button" id="x">Razumem</button></div>`;
   document.body.appendChild(d);
@@ -214,7 +214,7 @@ function renderN() {
     <input id="tel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(prefs.tel)}" autocomplete="tel" aria-label="Vaša telefonska številka">
     <div class="povzetek">${draft.photo ? `<img src="${draft.photo}" alt="">` : `<span>${ikona(draft.cat, 30)}</span>`}<div><b>${esc(draft.opis || strokaIme(draft.cat))}</b><small>${esc([kdo(draft.cat), prefs.kraj, draft.kdaj, draft.budget && draft.budget !== "Ne vem" ? draft.budget : ""].filter(Boolean).join(" · "))}</small></div></div>
     ${naprej("Pošlji mojstrom")}
-    <p class="note">Za vas je Fixko brezplačen. S pošiljanjem sprejemate <a class="link" href="pogoji.html">pogoje uporabe</a> in <a class="link" href="zasebnost.html">politiko zasebnosti</a>.</p>`;
+    <p class="note">Za vas je Popravko brezplačen. S pošiljanjem sprejemate <a class="link" href="pogoji.html">pogoje uporabe</a> in <a class="link" href="zasebnost.html">politiko zasebnosti</a>.</p>`;
   view.innerHTML = vrh + html;
   const pojdi = (n) => { draft.korak = n; renderN(); window.scrollTo(0, 0); };
   const err = (t) => { const el = document.getElementById("err"); el.textContent = t; el.hidden = false; el.scrollIntoView({ block: "center", behavior: "smooth" }); };
@@ -260,7 +260,7 @@ function renderN() {
 async function poslji(err) {
   savePrefs();
   if (!veljavenTel(prefs.tel)) return err("Vpišite telefonsko številko, npr. 041 123 456.");
-  if (!db) return err("Fixko še ni povezan s strežnikom. Poskusite malo kasneje.");
+  if (!db) return err("Popravko še ni povezan s strežnikom. Poskusite malo kasneje.");
   const btn = document.getElementById("naprej"); btn.disabled = true; btn.textContent = "Pošiljam ...";
   try {
     const id = doc(collection(db, "dela")).id;
@@ -419,7 +419,7 @@ function watchMine() {
 const aktiven = () => S.mojster?.narocninaDo && S.mojster.narocninaDo.toMillis() > Date.now();
 function renderM() {
   if (!prefs.uvod) return render();
-  if (!db) { view.innerHTML = `<div class="empty">Del za mojstre bo deloval, ko bo Fixko povezan s strežnikom.</div>`; return; }
+  if (!db) { view.innerHTML = `<div class="empty">Del za mojstre bo deloval, ko bo Popravko povezan s strežnikom.</div>`; return; }
   if (!S.mojster || S.urejam || !profilPopoln(S.mojster)) return renderProfil();
   if (!aktiven() && (BREZPLACNO || testnaFirma(S.mojster.firma)) && S.testniVklop !== "napaka") {
     // Brezplačen dostop (zaenkrat za vse) ali testni račun lastnikov.
@@ -578,7 +578,7 @@ async function odpovej(id, celo) {
 // Termin v Apple koledar (z opozorilom uro prej) in v Opomnike.
 async function vKoledar(j, vloga) {
   if (!j || !j.termin) return;
-  const naslov = vloga === "M" ? `Fixko: ${j.opis || strokaIme(j.stroka)}` : `Fixko: pride ${j.mojsterIme || "mojster"}`;
+  const naslov = vloga === "M" ? `Popravko: ${j.opis || strokaIme(j.stroka)}` : `Popravko: pride ${j.mojsterIme || "mojster"}`;
   const tel = vloga === "M" ? S.kontakti[j.id]?.tel : S.kontakti[j.id]?.mojsterTel;
   const opis = [j.opis || strokaIme(j.stroka), vloga === "N" ? j.mojsterFirma : "", tel ? "Telefon: " + tel : "", j.cena ? "Okvirna cena: " + j.cena : ""].filter(Boolean).join("\n");
   if (!native) return toast("Samo v aplikaciji", "Koledar deluje v aplikaciji na iPhonu.");
@@ -586,7 +586,7 @@ async function vKoledar(j, vloga) {
     const r = await FixkoKoledar.dodaj({ naslov, opis, kraj: j.kraj || "", zacetek: j.termin });
     if (r.odprto) return toast("Shranite termin", "Odprl se je koledar. Tapnite Shrani.");
     if (r.koledar || r.opomnik) toast("Dodano", [r.koledar ? "v koledar" : "", r.opomnik ? "v opomnike" : ""].filter(Boolean).join(" in ") + ". Opozorilo dobite uro prej.");
-    else toast("Ni dovoljenja", "Dovolite dostop v Nastavitve > Fixko > Koledarji in Opomniki.");
+    else toast("Ni dovoljenja", "Dovolite dostop v Nastavitve > Popravko > Koledarji in Opomniki.");
   } catch (e) { toast("Ni uspelo", "Termina ni bilo mogoče dodati."); }
 }
 function renderProfil() {
@@ -690,7 +690,7 @@ function renderPaywall() {
     <div class="err" id="err" hidden></div>
     <button class="btn" id="buy" type="button">${p.product === false ? "Začni preizkus" : esc(trial)}</button>
     ${ios ? `<button class="btn ghost" id="restore" type="button">Obnovi nakup</button>` : ""}
-    <p class="note">${p.product === false ? (ios ? "Naročnina v App Store še ni odprta." : "Naročnina še ni odprta.") + " Med preizkusom je Fixko za mojstre brezplačen." : "Naročnina se podaljša vsak mesec, dokler je ne prekličeš v nastavitvah Apple ID. Prekličeš kadarkoli."}</p>
+    <p class="note">${p.product === false ? (ios ? "Naročnina v App Store še ni odprta." : "Naročnina še ni odprta.") + " Med preizkusom je Popravko za mojstre brezplačen." : "Naročnina se podaljša vsak mesec, dokler je ne prekličeš v nastavitvah Apple ID. Prekličeš kadarkoli."}</p>
   </div>
   <div class="foot"><button class="link" id="edit" type="button">Uredi profil</button></div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
@@ -823,7 +823,7 @@ function settingsSheet() {
   d.querySelector("#man")?.addEventListener("click", () => FixkoPay.manage().catch(() => {}));
   d.querySelector("#obv").onclick = async () => {
     const t = await enablePush();
-    if (!t) return toast("Obvestila so izklopljena", android && !window.FIXKO_PUSH ? "Na Androidu bodo obvestila na voljo v naslednji verziji." : "Vklopi jih v nastavitvah telefona: Fixko > Obvestila.");
+    if (!t) return toast("Obvestila so izklopljena", android && !window.FIXKO_PUSH ? "Na Androidu bodo obvestila na voljo v naslednji verziji." : "Vklopi jih v nastavitvah telefona: Popravko > Obvestila.");
     if (S.mojster) await setDoc(doc(db, "mojstri", uid), { push: t }, { merge: true }).catch(() => {});
     toast("Obvestila so vklopljena", "");
   };
@@ -840,7 +840,7 @@ function settingsSheet() {
 const ascii = (t, n) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\x20-\x7E]/g, "").slice(0, n);
 function upnQr(pl, sklic) {
   const rok = new Date(Date.now() + 7 * 864e5);
-  const polja = ["UPNQR", "", "", "", "", "", "", "", "00000000001", "", "", "OTHR", ascii("Potrditev podjetja Fixko", 42),
+  const polja = ["UPNQR", "", "", "", "", "", "", "", "00000000001", "", "", "OTHR", ascii("Potrditev podjetja Popravko", 42),
     `${String(rok.getDate()).padStart(2, "0")}.${String(rok.getMonth() + 1).padStart(2, "0")}.${rok.getFullYear()}`,
     pl.iban.replace(/\s/g, ""), sklic.replace(/\s/g, ""), ascii(pl.prejemnik, 33), ascii(pl.ulica, 33), ascii(pl.kraj, 33)];
   const besedilo = polja.join("\n") + "\n";
@@ -854,10 +854,10 @@ async function preveriSheet() {
   d.innerHTML = `<div role="dialog" aria-label="Potrdi podjetje"><h2 style="margin-top:0">Potrdi podjetje</h2>
     <div class="zakaj"><b>Zakaj 1 cent?</b>
       <p>Davčno številko lahko vpiše kdorkoli, tudi tujo. Z računa podjetja pa lahko nakaže samo njegov lastnik. Ko na izpisku vidimo, da je cent prišel s TRR podjetja <b>${esc(m.firma)}</b>, vemo, da je podjetje res tvoje.</p>
-      <p>Tako stranke dobijo samo prave mojstre, ti pa oznako <b>»Podjetje preverjeno«</b>, ki ji stranke bolj zaupajo. To ni plačilo za Fixko, ampak samo enkratna potrditev.</p></div>
+      <p>Tako stranke dobijo samo prave mojstre, ti pa oznako <b>»Podjetje preverjeno«</b>, ki ji stranke bolj zaupajo. To ni plačilo za Popravko, ampak samo enkratna potrditev.</p></div>
     <p class="lead">Nakaži <b>0,01 €</b> z računa podjetja, ne z osebnega. Nakažeš lahko tudi ob vikendu, izberi takojšnje plačilo.</p>
     <div class="qr"><canvas id="qr"></canvas><small>Skeniraj v svoji banki (UPN QR)</small></div>
-    ${vrstica("Prejemnik", pl.prejemnik)}${vrstica("IBAN", pl.iban)}${vrstica("Znesek", "0,01 €")}${vrstica("Sklic", sklic)}${vrstica("Namen", "Potrditev podjetja Fixko")}
+    ${vrstica("Prejemnik", pl.prejemnik)}${vrstica("IBAN", pl.iban)}${vrstica("Znesek", "0,01 €")}${vrstica("Sklic", sklic)}${vrstica("Namen", "Potrditev podjetja Popravko")}
     <p class="hint">Tapni vrstico, da jo kopiraš. Sklic je pomemben, po njem nakazilo povežemo s tvojim profilom.</p>
     <div class="err" id="perr" hidden></div>
     <button class="btn" type="button" id="ok">${m.preverjanje?.cakam ? "Nakazal sem znova" : "Nakazal sem"}</button></div>`;
@@ -929,7 +929,7 @@ function shrink(file, max = 1280) {
   if (!prefs.krajRocno) najdiLokacijo(false);
   if (!cfg) { render(); return; }
   try { await initFb(); } catch (e) {
-    console.error(e); view.innerHTML = `<div class="empty">Ni povezave. Preverite internet in odprite Fixko znova.</div>`; return;
+    console.error(e); view.innerHTML = `<div class="empty">Ni povezave. Preverite internet in odprite Popravko znova.</div>`; return;
   }
   render();
   watchMine();
