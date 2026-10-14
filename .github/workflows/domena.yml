@@ -1,0 +1,19 @@
+name: Preveri domeno
+
+on:
+  workflow_dispatch:
+    inputs:
+      domene:
+        description: "Domene, ločene s presledkom"
+        default: "popravko.si popravko.com"
+
+jobs:
+  whois:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get install -y whois >/dev/null
+      - run: |
+          for d in ${{ inputs.domene }}; do
+            out=$(whois "$d" 2>&1 || true)
+            if echo "$out" | grep -qiE "no entries found|no match|not found|status:\s*free|available"; then echo "::notice::$d je PROSTA"; else echo "::notice::$d je ZASEDENA"; echo "$out" | grep -iE "registrar|registrant|expir|status" | head -5; fi
+          done

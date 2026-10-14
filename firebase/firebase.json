@@ -31,12 +31,24 @@
     },
     "singleProjectMode": true
   },
-  "hosting": {
-    "public": "stran",
-    "cleanUrls": true,
-    "ignore": [
-      "firebase.json",
-      "**/.*"
-    ]
-  }
+  "hosting": [
+    {
+      "site": "fixko-app",
+      "public": "stran",
+      "cleanUrls": true,
+      "ignore": [
+        "firebase.json",
+        "**/.*"
+      ]
+    },
+    {
+      "site": "popravko",
+      "public": "stran",
+      "cleanUrls": true,
+      "ignore": [
+        "firebase.json",
+        "**/.*"
+      ]
+    }
+  ]
 }
