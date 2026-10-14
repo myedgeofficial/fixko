@@ -16,7 +16,7 @@ _print = print
 def print(*a):
     t = " ".join(str(x) for x in a)
     _print(t)
-    if not t.startswith("::"): IZPIS.append(t)
+    if not t.startswith("::"): IZPIS.append(t[:600])
 
 
 def get(pot, **params):
@@ -167,6 +167,6 @@ if AKCIJA == "oddaj":
         if not napaka:
             poslji("PATCH", f"/reviewSubmissions/{sid}", {"type": "reviewSubmissions", "id": sid, "attributes": {"submitted": True}})
 
-for i in range(0, len(IZPIS), 40):
-    _print("::notice title=izpis%d::" % i + "%0A".join(x.replace("%", "%25") for x in IZPIS[i:i + 40]))
+for i in range(0, len(IZPIS), 6):
+    _print("::notice title=izpis%d::" % i + "%0A".join(x.replace("%", "%25") for x in IZPIS[i:i + 6]))
 sys.exit(1 if napaka else 0)
