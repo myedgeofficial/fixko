@@ -455,7 +455,7 @@ function profilKartica(m, terminov) {
     <div class="ps">${(m.stroke || []).map((k) => `<span>${ikona(k, 18, 2)}${esc(strokaIme(k))}</span>`).join("")}</div>
     <div class="pr">${ikona("pin", 18, 2)}<span>${esc(reg)}</span></div>
     ${jePreverjen(m) ? `<div class="prev">${ikona("kljukica", 16, 3)} Podjetje preverjeno</div>`
-      : S.placilo?.iban ? `<button class="potrdi" type="button" id="potrdiPodj">${ikona("kljukica", 20, 2.4)}<div><b>${m.preverjanje?.cakam ? "Čakamo na tvoje nakazilo" : "Potrdi podjetje"}</b><small>${m.preverjanje?.cakam ? "Ko ga vidimo, te potrdimo in se lahko javljaš." : m.preverjanje?.zavrnjeno ? "Nakazila nismo našli. Poskusi znova." : "Enkratno nakazilo 1 centa s TRR podjetja dokaže, da je podjetje res tvoje. Potem se lahko javljaš na dela."}</small></div><span class="pusc">›</span></button>` : ""}
+      : S.placilo?.iban ? `<button class="potrdi" type="button" id="potrdiPodj">${ikona("kljukica", 20, 2.4)}<div><b>${m.preverjanje?.cakam ? "Čakamo na tvoje nakazilo" : "Potrdi podjetje"}</b><small>${m.preverjanje?.cakam ? "Ko prispe, te potrdimo (običajno v nekaj minutah) in se lahko javljaš." : m.preverjanje?.zavrnjeno ? "Nakazila nismo našli. Poskusi znova." : "Enkratno nakazilo 1 centa s TRR podjetja dokaže, da je podjetje res tvoje. Potem se lahko javljaš na dela."}</small></div><span class="pusc">›</span></button>` : ""}
     <div class="pst"><div><b>${prostaDela().length}</b><small>prostih del</small></div><div><b>${terminov}</b><small>${terminov === 1 ? "termin" : terminov === 2 ? "termina" : terminov === 3 || terminov === 4 ? "termini" : "terminov"}</small></div><div><b>${Object.values(S.moje).filter((p) => p.status === "caka").length}</b><small>čaka na stranko</small></div></div>
   </section>`;
 }
@@ -867,7 +867,7 @@ async function preveriSheet() {
   d.querySelectorAll("[data-kopiraj]").forEach((r) => (r.onclick = () => { navigator.clipboard?.writeText(r.dataset.kopiraj.replace(" €", "")).then(() => toast("Kopirano", r.dataset.kopiraj)).catch(() => {}); }));
   d.querySelector("#ok").onclick = async () => {
     const b = d.querySelector("#ok"); b.disabled = true;
-    try { await call("nakazal", {}); d.remove(); toast("Hvala", "Ko vidimo nakazilo, te potrdimo in dobiš obvestilo. Običajno v enem dnevu."); }
+    try { await call("nakazal", {}); d.remove(); toast("Hvala", "Ko nakazilo prispe, te potrdimo in dobiš obvestilo. Običajno v nekaj minutah."); }
     catch (e) { b.disabled = false; const t = d.querySelector("#perr"); t.hidden = false; t.textContent = e.message || "Ni uspelo."; }
   };
 }
@@ -885,12 +885,29 @@ async function skrbnikSheet() {
     d.innerHTML = `<div role="dialog"><div class="spin">Nalagam ...</div></div>`;
     let r;
     try { r = await call("skrbnik", { koda: prefs.skrbnik, akcija: "seznam" }); } catch (e) { prefs.skrbnik = ""; savePrefs(); return prijava(e.message); }
+    const bs = await call("skrbnik", { koda: prefs.skrbnik, akcija: "banka-stanje" }).catch(() => ({}));
+    const dni = bs.veljaDo ? Math.ceil((bs.veljaDo - Date.now()) / 864e5) : 0;
+    const banka = !bs.nastavljeno ? `<div class="prosnja">${ikona("vprasaj", 22)}<div><b>Samodejno preverjanje ni nastavljeno</b><span>Manjkata Application ID in ključ Enable Banking. Nakazila potrjuj ročno.</span></div></div>`
+      : bs.povezano && dni > 0 ? `<div class="banka ${dni <= 14 ? "kmalu" : ""}">${ikona("kljukica", 20, 2.6)}<div><b>Banka povezana${bs.iban ? " · " + esc(bs.iban) : ""}</b><span>${bs.napaka ? "Zadnji pregled ni uspel: " + esc(bs.napaka) : `Prilive pregledam vsakih 5 minut${bs.zadnji ? ", nazadnje " + esc(pred(bs.zadnji)) : ""}.`} Dostop velja še ${dni} ${dni === 1 ? "dan" : "dni"}.</span></div></div>${dni <= 14 ? `<button class="btn" type="button" id="banka">Obnovi povezavo z banko</button>` : `<button class="link" type="button" id="preglej">Preglej prilive zdaj</button>`}`
+      : `<div class="prosnja">${ikona("vprasaj", 22)}<div><b>Banka ni povezana</b><span>Poveži OTP račun REMAKO, da Popravko sam potrjuje nakazila. Prijaviš se z OTP mobilno aplikacijo.</span></div></div><button class="btn" type="button" id="banka">Poveži banko</button>`;
     d.innerHTML = `<div role="dialog" aria-label="Potrjevanje podjetij"><h2 style="margin-top:0">Potrjevanje podjetij</h2>
-      <p class="lead">Na izpisku poišči nakazilo 0,01 € s tem sklicem. Preveri, da je plačnik to podjetje (račun lahko preveriš v registru TRR na AJPES).</p>
+      ${banka}
+      <p class="lead" style="margin-top:16px">${bs.povezano ? "Spodaj so samo nakazila, kjer se ime plačnika ni ujemalo s podjetjem, in mojstri, katerih nakazila še ni." : "Na izpisku poišči nakazilo 0,01 € s tem sklicem."} Preveri, da je plačnik to podjetje (račun lahko preveriš v registru TRR na AJPES).</p>
       ${r.mojstri.length ? r.mojstri.map((m) => `<div class="ponudba"><div class="mojster">${m.slika ? `<img src="${esc(m.slika)}" alt="">` : ""}<div><b>${esc(m.firma)}</b><span>${esc(m.ime)} · ${esc(m.tel)}</span><small>Davčna ${esc(m.davcna || "ni vpisana")}</small></div></div>
-        <div class="pogoj"><span>Sklic</span><b>${esc(m.sklic)}</b></div>
+        <div class="pogoj"><span>Sklic</span><b>${esc(m.sklic)}</b></div>${m.placnik ? `<div class="pogoj"><span>Plačnik</span><b>${esc(m.placnik)}</b></div>` : ""}
         <div class="row"><button class="btn small" type="button" data-p="${m.uid}">Potrdi</button><button class="btn small ghost" type="button" data-z="${m.uid}">Ni nakazila</button></div></div>`).join("")
         : `<div class="empty"><b>Ni čakajočih</b>Ko mojster nakaže in tapne »Nakazal sem«, se pokaže tukaj.</div>`}</div>`;
+    d.querySelector("#banka")?.addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      try { const r = await call("skrbnik", { koda: prefs.skrbnik, akcija: "banka-povezi" }); window.open(r.url, "_blank"); toast("Prijavi se v OTP", "Ko končaš, se vrni sem in odpri to okno znova."); }
+      catch (x) { toast("Ni uspelo", x.message || ""); }
+      e.target.disabled = false;
+    });
+    d.querySelector("#preglej")?.addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      try { const r = await call("skrbnik", { koda: prefs.skrbnik, akcija: "banka-preglej" }); toast("Pregledano", `Prilivov 0,01 €: ${r.prilivov || 0}, potrjenih: ${(r.rezultat || []).filter((x) => x.izid === "potrjen").length}.`); seznam(); }
+      catch (x) { e.target.disabled = false; toast("Ni uspelo", x.message || ""); }
+    });
     d.querySelectorAll("[data-p],[data-z]").forEach((b) => (b.onclick = async () => {
       b.disabled = true;
       try { await call("skrbnik", { koda: prefs.skrbnik, akcija: b.dataset.p ? "potrdi" : "zavrni", uid: b.dataset.p || b.dataset.z }); toast(b.dataset.p ? "Potrjeno" : "Zavrnjeno", "Mojster je dobil obvestilo."); seznam(); }

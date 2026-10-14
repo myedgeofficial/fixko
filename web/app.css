@@ -258,3 +258,9 @@ em.prev{margin-top:4px;font-size:14px}
 .zakaj{background:var(--accent-soft);border-radius:14px;padding:12px 14px;margin:4px 0 14px}
 .zakaj>b{display:block;font:700 18px var(--display);color:var(--accent)}
 .zakaj p{margin:6px 0 0;font-size:16px;line-height:1.4}
+.banka{display:flex;gap:12px;align-items:flex-start;background:#E7F3EC;border-radius:14px;padding:12px 14px;color:var(--ink)}
+.banka svg{color:var(--ok);flex:none;margin-top:2px}
+.banka b{display:block;font-size:17px}
+.banka span{display:block;font-size:15px;color:var(--muted)}
+.banka.kmalu{background:var(--warm-soft)}
+.banka.kmalu svg{color:var(--warm)}

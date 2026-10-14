@@ -39,6 +39,15 @@
       "ignore": [
         "firebase.json",
         "**/.*"
+      ],
+      "rewrites": [
+        {
+          "source": "/banka",
+          "function": {
+            "functionId": "bankaSeja",
+            "region": "europe-west1"
+          }
+        }
       ]
     },
     {
@@ -48,6 +57,15 @@
       "ignore": [
         "firebase.json",
         "**/.*"
+      ],
+      "rewrites": [
+        {
+          "source": "/banka",
+          "function": {
+            "functionId": "bankaSeja",
+            "region": "europe-west1"
+          }
+        }
       ]
     }
   ]

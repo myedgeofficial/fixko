@@ -5,13 +5,15 @@
 // - narocnina: preveri Applov podpisan nakup (JWS) in mojstru odklene dela.
 // - izbrisi: izbriše uporabnikove podatke (zahteva App Store).
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 const { Timestamp, FieldValue } = require("firebase-admin/firestore");
 const http2 = require("http2");
 const crypto = require("crypto");
 const { opisTermina, strokaIme, veljavnaDavcna, testnaFirma, sklicIz, jePreverjen } = require("./besedila");
+const banka = require("./banka");
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
@@ -339,6 +341,30 @@ exports.nakazal = onCall(async (req) => {
   return { sklic: sklicIz(uid) };
 });
 
+async function potrdiMojstra(mRef, md, kako) {
+  await mRef.update({ preverjeno: { davcna: md.davcna || "", ob: FieldValue.serverTimestamp(), ...kako }, preverjanje: FieldValue.delete() });
+  if (md.push) await sendApns([md.push], "Podjetje je potrjeno", "Zdaj se lahko javljaš na dela.", { vloga: "M" });
+  return { ok: true };
+}
+
+// Banka: povratek s prijave v OTP (hosting /banka) in pregled prilivov vsakih 5 minut.
+const stran = (naslov, besedilo) => `<!doctype html><html lang="sl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Popravko</title><style>body{font:19px -apple-system,system-ui,sans-serif;background:#F4F6F5;color:#16201D;display:grid;place-items:center;min-height:90vh;margin:0;padding:20px;text-align:center}h1{font-size:26px}</style></head><body><div><h1>${naslov}</h1><p>${besedilo}</p></div></body></html>`;
+exports.bankaSeja = onRequest(async (req, res) => {
+  const { code, state, error } = req.query;
+  try {
+    if (error || !code) throw new Error("Banka ni dovolila dostopa (" + String(error || "ni kode").slice(0, 80) + ").");
+    const iban = await banka.seja(String(code), String(state || ""));
+    res.send(stran("Banka je povezana ✓", `Popravko bo zdaj sam preverjal nakazila na račun ${iban.replace(/</g, "")}. To okno lahko zapreš in se vrneš v aplikacijo.`));
+  } catch (e) {
+    console.error("bankaSeja", e);
+    res.status(400).send(stran("Povezava ni uspela", String(e.message).replace(/</g, "")));
+  }
+});
+exports.pregledBanke = onSchedule({ schedule: "every 5 minutes", region: "europe-west1", timeoutSeconds: 120 }, async () => {
+  const r = await banka.preglej(potrdiMojstra).catch((e) => ({ napaka: e.message }));
+  if (r.rezultat?.length || r.napaka) console.log("pregledBanke", JSON.stringify(r));
+});
+
 // Skrbniški dostop s kodo; v bazi je samo njen SHA-256 (nastavitve/skrbnik.hash).
 async function skrbnik(koda) {
   const h = (await db.doc("nastavitve/skrbnik").get()).data()?.hash;
@@ -351,20 +377,24 @@ exports.skrbnik = onCall(async (req) => {
   const akcija = req.data?.akcija;
   if (akcija === "seznam") {
     const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();
-    return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), ob: m.preverjanje?.ob?.toMillis() || 0 }; }) };
+    return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0 }; }) };
   }
   if (akcija === "potrdi" || akcija === "zavrni") {
     const mRef = db.doc("mojstri/" + String(req.data?.uid || ""));
     const m = await mRef.get();
     if (!m.exists) throw new HttpsError("not-found", "Mojstra ni.");
     const md = m.data();
-    if (akcija === "potrdi") await mRef.update({ preverjeno: { davcna: md.davcna || "", ob: FieldValue.serverTimestamp() }, preverjanje: FieldValue.delete() });
-    else await mRef.update({ preverjanje: { cakam: false, zavrnjeno: true, sklic: sklicIz(m.id), ob: FieldValue.serverTimestamp() } });
-    if (md.push) {
-      await sendApns([md.push], akcija === "potrdi" ? "Podjetje je potrjeno" : "Nakazila nismo našli",
-        akcija === "potrdi" ? "Zdaj se lahko javljaš na dela." : "Preveri, da si nakazal s TRR podjetja in s pravim sklicem.", { vloga: "M" });
-    }
+    if (akcija === "potrdi") return potrdiMojstra(mRef, md, { samodejno: false });
+    await mRef.update({ preverjanje: { cakam: false, zavrnjeno: true, sklic: sklicIz(m.id), ob: FieldValue.serverTimestamp() } });
+    if (md.push) await sendApns([md.push], "Nakazila nismo našli", "Preveri, da si nakazal s TRR podjetja in s pravim sklicem.", { vloga: "M" });
     return { ok: true };
+  }
+  if (akcija === "banka-stanje") return banka.stanje();
+  if (akcija === "banka-povezi") {
+    try { return { url: await banka.povezi() }; } catch (e) { throw new HttpsError("failed-precondition", e.message); }
+  }
+  if (akcija === "banka-preglej") {
+    try { return await banka.preglej(potrdiMojstra); } catch (e) { throw new HttpsError("unavailable", e.message); }
   }
   throw new HttpsError("invalid-argument", "Neznano dejanje.");
 });
