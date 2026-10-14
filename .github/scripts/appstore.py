@@ -32,7 +32,7 @@ def poslji(metoda, pot, data):
     r = requests.request(metoda, API + pot, headers=H, json={"data": data}, timeout=60)
     ok = r.status_code < 400
     napaka |= not ok
-    print(("::notice::" if ok else "::error::") + f"{metoda} {pot}: {r.status_code} {'' if ok else ' '.join(r.text.split())[:800]}")
+    print(("" if ok else "::error::") + f"{metoda} {pot}: {r.status_code} {'' if ok else ' '.join(r.text.split())[:800]}")
     return r.json() if ok and r.text else {}
 
 
@@ -69,7 +69,7 @@ def json_poslji(metoda, pot, telo):
     r = requests.request(metoda, (pot if pot.startswith("http") else API + pot), headers=H, json=telo, timeout=60)
     ok = r.status_code < 400
     napaka |= not ok
-    print(("::notice::" if ok else "::error::") + f"{metoda} {pot}: {r.status_code} {'' if ok else ' '.join(r.text.split())[:800]}")
+    print(("" if ok else "::error::") + f"{metoda} {pot}: {r.status_code} {'' if ok else ' '.join(r.text.split())[:800]}")
     return r.json() if ok and r.text else {}
 
 
