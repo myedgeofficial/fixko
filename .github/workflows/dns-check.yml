@@ -9,10 +9,10 @@ jobs:
       - shell: bash {0}
         run: |
           sudo apt-get install -y -qq dnsutils >/dev/null 2>&1
-          echo "== delegation per .si server"
-          for s in $(dig +short si NS); do echo "-- $s: $(dig +norec +short remako.si NS @$s | tr '\n' ' ') $(dig +norec remako.si NS @$s | grep -A3 AUTHORITY | grep NS | awk '{print $5}' | tr '\n' ' ')"; done
-          for ns in ns1.freedns.si ns2.freedns.si ns3.freedns.si cdns1.controlpanel.si cdns2.controlpanel.si; do
-            echo "== $ns"; for q in "remako.si SOA" "remako.si NS" "remako.si A" "www.remako.si A" "www.remako.si CNAME"; do echo "  $q: $(dig +norec +short $q @$ns 2>&1 | tr '\n' ' ') [$(dig +norec $q @$ns | grep -o 'status: [A-Z]*')]"; done
-          done
-          echo "== public"; for r in 1.1.1.1 8.8.8.8 9.9.9.9; do echo "$r: A=$(dig +short remako.si A @$r|tr '\n' ' ') status=$(dig remako.si A @$r | grep -o 'status: [A-Z]*')"; done
-          echo "== pages api"; curl -sS -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/repusicurska-dot/remako-si/pages | head -30
+          for s in $(dig +short si NS | head -2); do echo "delegation @$s: $(dig +norec remako.si NS @$s | grep -A3 AUTHORITY | grep NS | awk '{print $5}' | tr '\n' ' ')"; done
+          for r in 1.1.1.1 8.8.8.8; do for t in A MX TXT; do echo "$r $t: $(dig +short remako.si $t @$r | tr '\n' ' ') [$(dig remako.si $t @$r | grep -o 'status: [A-Z]*')]"; done; done
+          for t in MX TXT; do echo "ns1.freedns $t: $(dig +norec +short remako.si $t @ns1.freedns.si | tr '\n' ' ')"; done
+          echo "_dmarc: $(dig +short _dmarc.remako.si TXT @1.1.1.1)"
+          for u in https://remako.si https://www.remako.si http://remako.si; do echo "$u: $(curl -sS -m 15 -o /dev/null -w '%{http_code} -> %{redirect_url} ssl=%{ssl_verify_result}' $u 2>&1)"; done
+          echo | timeout 15 openssl s_client -connect remako.si:443 -servername remako.si 2>/dev/null | openssl x509 -noout -subject -issuer -enddate
+          echo "pages: $(curl -sS -H 'Authorization: Bearer ${{ github.token }}' https://api.github.com/repos/repusicurska-dot/remako-si/pages | tr -d '\n ' | head -c 500)"
