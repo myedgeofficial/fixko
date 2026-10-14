@@ -1,0 +1,22 @@
+name: App Store oddaja
+
+on:
+  workflow_dispatch:
+    inputs:
+      akcija:
+        description: "stanje | vpisi | slike | oddaj"
+        default: "stanje"
+
+jobs:
+  appstore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyjwt cryptography requests
+      - run: python3 .github/scripts/appstore.py
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+          BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+          AKCIJA: ${{ inputs.akcija }}

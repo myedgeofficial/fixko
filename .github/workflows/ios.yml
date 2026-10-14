@@ -6,7 +6,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths-ignore: ["firebase/**", "app/android/**", ".github/workflows/android.yml", ".github/workflows/firebase.yml", ".github/workflows/testerji.yml", ".github/scripts/**", "README.md"]
+    paths-ignore: ["firebase/**", "app/android/**", ".github/workflows/android.yml", ".github/workflows/firebase.yml", ".github/workflows/testerji.yml", ".github/workflows/appstore.yml", "appstore/**", ".github/scripts/**", "README.md"]
   workflow_dispatch:
 
 concurrency:
