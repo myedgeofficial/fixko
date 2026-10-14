@@ -11,6 +11,12 @@ tok = jwt.encode({"iss": os.environ["ISSUER_ID"], "iat": int(time.time()), "exp"
 H = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
 AKCIJA = os.environ.get("AKCIJA", "stanje")
 napaka = False
+IZPIS = []
+_print = print
+def print(*a):
+    t = " ".join(str(x) for x in a)
+    _print(t)
+    if not t.startswith("::"): IZPIS.append(t)
 
 
 def get(pot, **params):
@@ -58,4 +64,6 @@ if AKCIJA == "stanje":
     print("SUBMISSIONS", json.dumps([s["attributes"] for s in get("/reviewSubmissions", **{"filter[app]": AID})["data"]]))
     print("SUBGROUPS", json.dumps([g["attributes"] for g in get(f"/apps/{AID}/subscriptionGroups")["data"]]))
 
+for i in range(0, len(IZPIS), 40):
+    _print("::notice title=izpis%d::" % i + "%0A".join(x.replace("%", "%25") for x in IZPIS[i:i + 40]))
 sys.exit(1 if napaka else 0)
