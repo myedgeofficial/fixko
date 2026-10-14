@@ -78,6 +78,7 @@ if ver is None and AKCIJA != "stanje":
     print("::error::Ni verzije v pripravi"); sys.exit(1)
 
 if AKCIJA == "vpisi":
+    CENA_OK = requests.get(f"{API}/apps/{AID}/appPriceSchedule/manualPrices", headers=H, timeout=60).json().get("data")
     for l in get(f"/appInfos/{info['id']}/appInfoLocalizations")["data"]:
         poslji("PATCH", f"/appInfoLocalizations/{l['id']}", {"type": "appInfoLocalizations", "id": l["id"], "attributes": {"subtitle": B["podnaslov"], "privacyPolicyUrl": B["zasebnost"]}})
     poslji("PATCH", f"/appInfos/{info['id']}", {"type": "appInfos", "id": info["id"], "relationships": {
@@ -112,7 +113,7 @@ if AKCIJA == "vpisi":
     else:
         poslji("POST", "/appStoreReviewDetails", {"type": "appStoreReviewDetails", "attributes": rev, "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": ver["id"]}}}})
     # cena: brezplačno
-    if not get(f"/appPriceSchedules/{AID}/manualPrices")["data"]:
+    if not CENA_OK:
         pp = get(f"/apps/{AID}/appPricePoints", **{"filter[territory]": "SVN", "limit": 5})["data"]
         nic = next(p for p in pp if float(p["attributes"]["customerPrice"]) == 0)
         json_poslji("POST", "/appPriceSchedules", {"data": {"type": "appPriceSchedules", "relationships": {
@@ -125,9 +126,10 @@ if AKCIJA == "vpisi":
     r = requests.get(f"{API}/apps/{AID}/appAvailabilityV2", headers=H, timeout=60)
     print("DOSTOPNOST", r.status_code, " ".join(r.text.split())[:300])
     if r.status_code == 404 or not r.json().get("data"):
+        ter = [t["id"] for t in get("/territories", limit=200)["data"]]
         json_poslji("POST", "https://api.appstoreconnect.apple.com/v2/appAvailabilities", {"data": {"type": "appAvailabilities", "attributes": {"availableInNewTerritories": False},
-            "relationships": {"app": {"data": {"type": "apps", "id": AID}}, "territoryAvailabilities": {"data": [{"type": "territoryAvailabilities", "id": "${svn}"}]}}},
-            "included": [{"type": "territoryAvailabilities", "id": "${svn}", "attributes": {"available": True}, "relationships": {"territory": {"data": {"type": "territories", "id": "SVN"}}}}]})
+            "relationships": {"app": {"data": {"type": "apps", "id": AID}}, "territoryAvailabilities": {"data": [{"type": "territoryAvailabilities", "id": "${" + t + "}"} for t in ter]}}},
+            "included": [{"type": "territoryAvailabilities", "id": "${" + t + "}", "attributes": {"available": t == "SVN"}, "relationships": {"territory": {"data": {"type": "territories", "id": t}}}} for t in ter]})
     # zadnji veljaven build
     bl = [b for b in get("/builds", **{"filter[app]": AID, "sort": "-uploadedDate", "limit": 5})["data"] if b["attributes"]["processingState"] == "VALID" and not b["attributes"].get("expired")]
     if bl:
