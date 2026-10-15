@@ -15,7 +15,7 @@ const PRIMERI = {
     "v dnevni sobi ne dela nobena luč", "ko prižgem kuhalno ploščo vrže varovalko", "rabim novo vtičnico na balkonu", "lampa utripa",
     "Ne dela vtičnica", "stekdoza ne dela", "pregorela luč na hodniku", "menjava zarnice na stropu", "birna je pregorela", "salter ne dela", "stikalo iskri",
     "varovalka stalno pada", "izbija fi stikalo", "nimamo elektrike v kuhinji", "ni toka v garaži", "priklop štedilnika", "nov lestenec v dnevni sobi",
-    "montaža luči", "domofon ne dela", "zvonec ne zvoni", "napeljava za klimo elektrika", "kabel je pregrizen", "vticnica je crna", "pečica ne greje"
+    "montaža luči", "domofon ne dela", "zvonec ne zvoni", "napeljava za klimo elektrika", "kabel je pregrizen", "vticnica je crna"
   ],
   keramika: [
     "v kuhinji so odstopile ploščice nad pultom", "fuge so črne",
@@ -24,12 +24,12 @@ const PRIMERI = {
   pleskanje: [
     "po poplavi so stene vlažne in plesnive", "rabim nekoga da prefarba spalnico", "strop je rumen od dima",
     "prepleskati dnevno sobo", "pobeliti stanovanje", "farbat stene", "malat sobo", "plesen na steni", "strop je umazan, treba prebelit", "razpoke v steni",
-    "gletanje sten", "nova barva v otroški sobi", "fasada odpada", "tapete odstraniti", "pleskar za hodnik", "pobarvat ograjo"
+    "gletanje sten", "nova barva v otroški sobi", "tapete odstraniti", "pleskar za hodnik", "pobarvat ograjo"
   ],
   mizarstvo: [
-    "vhodna vrata težko zaklenem", "okenska polica je gnila", "vrata od omare so padla dol",
-    "vrata se ne zapirajo", "vrata skripajo", "kljuka je odpadla", "okno se ne zapre", "rolete ne delajo", "polkna so trohnela", "komarnik za okno",
-    "nova kuhinja po meri mizar", "parket je dvignjen", "laminat poškodovan", "stopnice skripajo", "predal se zatika", "tisler za omaro po meri", "šarnir na omarici je počil"
+    "okenska polica je gnila", "vrata od omare so padla dol",
+    "vrata se ne zapirajo", "vrata skripajo", "kljuka je odpadla", "okno se ne zapre", "polkna so trohnela",
+    "nova kuhinja po meri mizar", "stopnice skripajo", "predal se zatika", "tisler za omaro po meri", "šarnir na omarici je počil"
   ],
   montaza: [
     "kupila sem posteljo v jysku pa je ne znam sestavit", "rabim nekoga da mi obesi slike", "pritrdit omarico v kopalnici",
@@ -61,8 +61,20 @@ const PRIMERI = {
     "selitev stanovanja", "preselit se v hišo", "prevoz pralnega stroja", "prepeljat kavč", "odvoz kosovnih odpadkov", "izprazniti podstrešje",
     "prenesti klavir", "kombi za selitev", "odpeljat stare stvari", "odvoz šuta"
   ],
+  tla: [
+    "parket je dvignjen", "laminat poškodovan", "Laminat se je napihnil", "treba prebrusit parket", "položit vinil v dnevni sobi", "zamenjat talne letvice", "tapison bi zamenjal"
+  ],
+  zidar: [
+    "zid na vrtu se podira", "zidar za ograjo iz betona", "fasada odpada", "odpada omet", "razpoka v zidu", "predelna stena iz knaufa", "vlaga v zidu"
+  ],
+  okna: [
+    "vhodna vrata težko zaklenem", "rolete ne delajo", "komarnik za okno", "razbito okno", "okno ne tesni", "zamenjat žaluzije", "zaklenil sem se ven"
+  ],
+  aparati: [
+    "pečica ne greje", "pralni stroj ne ožame", "hladilnik ne hladi", "pomivalni stroj ne črpa vode", "sušilni stroj ne dela", "mikrovalovka ne greje"
+  ],
   drugo: [
-    "zid na vrtu se podira", "rabim varilca za vrata","zidar za ograjo iz betona", "porušit steno", "varit ograjo", "hišnik za manjša popravila", "zamenjati razbito steklo"]
+    "rabim varilca za vrata","porušit steno", "varit ograjo", "hišnik za manjša popravila", "zamenjati razbito steklo"]
 };
 
 test("prepoznava stroke na primerih", () => {

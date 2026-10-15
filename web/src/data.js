@@ -1,7 +1,8 @@
 // Stroke, regije in termini. Ključi stroke in regij se shranjujejo v bazo, zato jih ne preimenuj.
 export const STROKE = [
   ["vodovod", "Vodovodar"], ["elektrika", "Električar"], ["keramika", "Keramičar"], ["pleskanje", "Pleskar"],
-  ["mizarstvo", "Mizar"], ["montaza", "Montaža pohištva"], ["ogrevanje", "Ogrevanje in klima"],
+  ["tla", "Talne obloge"], ["zidar", "Zidar in fasade"], ["mizarstvo", "Mizar"], ["okna", "Okna, vrata, senčila"],
+  ["montaza", "Montaža pohištva"], ["ogrevanje", "Ogrevanje in klima"], ["aparati", "Gospodinjski aparati"],
   ["streha", "Krovec"], ["vrt", "Vrtnar"], ["ciscenje", "Čiščenje"], ["selitve", "Selitve in prevoz"], ["drugo", "Hišnik, drugo"]
 ];
 export const REGIJE = [

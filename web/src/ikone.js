@@ -12,6 +12,10 @@ const P = {
   ciscenje: '<path d="M11 3l1.8 4.2L17 9l-4.2 1.8L11 15l-1.8-4.2L5 9l4.2-1.8z"/><path d="M18 14.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>',
   selitve: '<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
   drugo: '<rect x="3" y="8" width="18" height="11" rx="1.5"/><path d="M8 8V5h8v3M3 13h18M11 12v2h2v-2"/>',
+  tla: '<path d="M3 20h18"/><path d="M3 15.5h18"/><path d="M8 15.5V20M15 15.5V20M11.5 11V15.5"/><path d="M3 11h18"/>',
+  zidar: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19"/>',
+  okna: '<rect x="4" y="3" width="16" height="18" rx="1.2"/><path d="M12 3v18M4 12h16"/>',
+  aparati: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M5 7.5h14M8 5.2h.5M11 5.2h.5"/><circle cx="12" cy="14" r="4"/>',
   // splošne
   kamera: '<path d="M3 8h3.5l1.7-2.5h7.6L17.5 8H21v11H3z"/><circle cx="12" cy="13.5" r="3.6"/>',
   telefon: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',

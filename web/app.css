@@ -1,7 +1,7 @@
 :root{
-  --bg:#F4F6F5; --surface:#FFFFFF; --ink:#16201D; --muted:#56635F; --line:#D9E0DD;
-  --accent:#2F5E52; --accent-ink:#FFFFFF; --accent-soft:#E6EFEC; --ok:#2E7D4F; --warn:#B26A12; --danger:#A3332B;
-  --shadow:0 1px 2px rgba(22,32,29,.06),0 4px 14px rgba(22,32,29,.06);
+  --bg:#F6F3EE; --surface:#FFFDFA; --ink:#1E2724; --muted:#5E6864; --line:#E5DFD5;
+  --accent:#3A7465; --accent-ink:#FFFFFF; --accent-soft:#E8F0EC; --ok:#2E7D4F; --warn:#B26A12; --danger:#A3332B;
+  --shadow:0 1px 2px rgba(70,52,30,.05),0 6px 18px rgba(70,52,30,.06);
   --display:ui-rounded,-apple-system,system-ui,sans-serif;
   --body:-apple-system,system-ui,"Segoe UI",sans-serif;
   --oglas:0px;
@@ -176,8 +176,10 @@ label.btn svg{vertical-align:-5px;margin-right:4px}
 .av{flex:none;width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--warm)}
 .tri{border:0;background:none;color:var(--muted);font-size:14px;letter-spacing:1px;width:44px;height:44px;flex:none}
 .pw,.pw-in{position:relative}
-.post .pic,.det .pic{aspect-ratio:1;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);overflow:hidden}
+.det .pic{aspect-ratio:1;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);overflow:hidden}
 .pic img{width:100%;height:100%;object-fit:cover;display:block}
+/* Slika v objavi: manjša, z robom, da objava ne deluje kričeče. */
+.post .pic{height:190px;margin:2px 14px 0;border-radius:14px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);overflow:hidden}
 .pic.vrti{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
 .pic.vrti::-webkit-scrollbar{display:none}
 .pic.vrti img{flex:0 0 100%;scroll-snap-align:start}
@@ -221,6 +223,8 @@ label.btn svg{vertical-align:-5px;margin-right:4px}
 .det .body{padding:16px}
 .zapri{position:absolute;top:10px;right:10px;z-index:2;width:40px;height:40px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:18px}
 .post .pic.brez,.det .pic.brez{aspect-ratio:4/3;align-content:center;gap:10px;padding:24px;background:linear-gradient(var(--accent),var(--accent));color:var(--accent-ink);text-align:center}
+.post .pic.brez{height:auto;min-height:120px;padding:18px;aspect-ratio:auto}
+.post .pic.brez p{font-size:20px}
 .pic.brez p{margin:0;font:700 24px/1.25 var(--display);text-wrap:balance;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 
 .list,.feed{grid-template-columns:minmax(0,1fr)}

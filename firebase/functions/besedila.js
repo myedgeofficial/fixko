@@ -2,7 +2,8 @@
 const STROKE = {
   vodovod: "Vodovodar", elektrika: "Električar", keramika: "Keramičar", pleskanje: "Pleskar", mizarstvo: "Mizar",
   montaza: "Montaža pohištva", ogrevanje: "Ogrevanje in klima", streha: "Krovec", vrt: "Vrtnar", ciscenje: "Čiščenje",
-  selitve: "Selitve in prevoz", drugo: "Hišnik"
+  selitve: "Selitve in prevoz", drugo: "Hišnik", tla: "Talne obloge", zidar: "Zidar in fasade",
+  okna: "Okna, vrata, senčila", aparati: "Gospodinjski aparati"
 };
 const strokaIme = (k) => STROKE[k] || k;
 

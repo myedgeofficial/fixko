@@ -90,12 +90,12 @@ service cloud.firestore {
       allow create: if prijavljen() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
         && profil(request.resource.data)
-        && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 12
+        && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 20
         && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
       allow update: if prijavljen() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
         && profil(request.resource.data)
-        && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 12
+        && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 20
         && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
       allow delete: if false;
     }
