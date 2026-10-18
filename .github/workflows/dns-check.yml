@@ -8,10 +8,6 @@ jobs:
     steps:
       - shell: bash {0}
         run: |
-          sudo apt-get install -y -qq dnsutils >/dev/null 2>&1
-          for n in remako.si www.remako.si; do for t in A AAAA CNAME CAA; do echo "$n $t: $(dig +short $n $t @1.1.1.1 | tr '\n' ' ')"; done; done
-          for h in remako.si www.remako.si; do echo "== cert $h"; echo | timeout 15 openssl s_client -connect $h:443 -servername $h 2>/dev/null | openssl x509 -noout -subject -issuer -enddate -ext subjectAltName; done
-          for u in https://remako.si https://www.remako.si http://remako.si http://www.remako.si; do echo "$u: $(curl -sS -m 15 -o /dev/null -w '%{http_code} -> %{redirect_url}' $u 2>&1 | tail -1)"; done
-          echo "== pages"; curl -sS -H 'Authorization: Bearer ${{ github.token }}' https://api.github.com/repos/repusicurska-dot/remako-si/pages
-          echo "== safebrowsing transparency"; curl -sS -m 15 "https://transparencyreport.google.com/transparencyreport/api/v3/safebrowsing/status?site=remako.si" | head -c 300; echo
-# Sun Oct 18 15:27:29 UTC 2026
+          for q in "bundleId=com.byurska.lumora" "bundleId=si.fixko.app" "bundleId=si.nakupko.app" "id=6818745132" "id=6821712043"; do echo "== $q"; curl -sS "https://itunes.apple.com/lookup?$q&country=si" | python3 -c 'import sys,json;d=json.load(sys.stdin);[print(r.get("trackName"),r.get("trackViewUrl"),r.get("bundleId"),r.get("price")) for r in d["results"]] or print("none")'; done
+          echo "== search"; curl -sS "https://itunes.apple.com/search?term=manifest+by+urska&country=si&entity=software" | python3 -c 'import sys,json;d=json.load(sys.stdin);[print(r.get("trackName"),r.get("trackViewUrl"),r.get("bundleId")) for r in d["results"][:5]]'
+          for p in si.nakupko.app si.fixko.app com.byurska.lumora; do echo "play $p: $(curl -sS -o /dev/null -w '%{http_code}' "https://play.google.com/store/apps/details?id=$p&hl=sl")"; done
