@@ -14,3 +14,4 @@ jobs:
           for u in https://remako.si https://www.remako.si http://remako.si http://www.remako.si; do echo "$u: $(curl -sS -m 15 -o /dev/null -w '%{http_code} -> %{redirect_url}' $u 2>&1 | tail -1)"; done
           echo "== pages"; curl -sS -H 'Authorization: Bearer ${{ github.token }}' https://api.github.com/repos/repusicurska-dot/remako-si/pages
           echo "== safebrowsing transparency"; curl -sS -m 15 "https://transparencyreport.google.com/transparencyreport/api/v3/safebrowsing/status?site=remako.si" | head -c 300; echo
+# Sun Oct 18 15:27:29 UTC 2026
