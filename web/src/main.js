@@ -342,7 +342,7 @@ function detN(j) {
   if (j.status === "opravljeno") st = `<div class="status"><span class="dot off"></span>Opravljeno${j.mojsterIme ? `: ${esc(j.mojsterIme)}` : ""}</div>`
     + (!j.mojster ? "" : j.ocene?.M ? `<div class="vasa">Vaša ocena <span class="zv">${zvezde(j.ocene.M)}</span></div>` : `<button class="btn" type="button" data-oceni="${j.id}">${ikona("zvezda", 22)} Ocenite mojstra</button>`);
   else if (j.status === "preklicano") st = `<div class="status"><span class="dot off"></span>Preklicano</div>`;
-  else if (j.status === "prevzeto") st = `<div class="status"><span class="dot ok"></span>Mojster pride ${esc(opisTermina(j.termin))}</div>
+  else if (j.status === "prevzeto") st = `<div class="status"><span class="dot ok"></span>${j.naPoti ? "Mojster je na poti" : `Mojster pride ${esc(opisTermina(j.termin))}`}</div>
     <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${ocenaZnak(j.mojster)}${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}${j.mojsterPreverjen ? preverjenoZnak : ""}</div></div>
     ${k.mojsterTel ? `<div class="row"><span class="phone">${esc(k.mojsterTel)}</span><a class="btn small" href="tel:${esc(k.mojsterTel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
@@ -466,7 +466,7 @@ function profilKartica(m, terminov) {
 }
 const prostaDela = () => {
   const skrita = new Set(prefs.skrita || []);
-  return S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && !["zavrnjeno", "odpovedal"].includes(S.moje[j.id]?.status) && (S.mojster?.regije || []).some((r) => r === "vsa" || r === j.regija));
+  return S.feed.filter((j) => j.status === "odprto" && !skrita.has(j.id) && !["zavrnjeno", "odpovedal"].includes(S.moje[j.id]?.status) && (S.mojster?.regije || []).some((r) => r === "vsa" || r === j.regija || (j.sosednje || []).includes(r)));
 };
 const profilPopoln = (m) => !!(m && m.slika && m.firma && (m.davcna || testnaFirma(m.firma)) && m.pogoji === POGOJI_VERZIJA);
 // Objava v viru (kot na Instagramu): glava, velika slika, gumb in opis. Podrobnosti ob tapu.
@@ -504,6 +504,7 @@ function detT(j) {
     ${ocenaZnak(j.lastnik) ? `<div class="pogoj"><span>Stranka</span><b>${ocenaZnak(j.lastnik)}</b></div>` : ""}
     ${k.tel ? `<div class="row"><span class="phone">${esc(k.tel)}</span><a class="btn small" href="tel:${esc(k.tel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
+    ${j.naPoti ? `<div class="vasa">${ikona("kljukica", 18, 3)} Stranka ve, da si na poti</div>` : `<button class="btn" type="button" data-napoti="${j.id}">Na poti sem</button>`}
     <div class="row"><button class="link" type="button" data-odpovem="${j.id}">Odpovej termin</button></div></div>`;
 }
 /* ---------- okno s podrobnostmi ---------- */
@@ -536,6 +537,11 @@ function vezi(root) {
   na("[data-zavrni]", (b) => odgovori(b, false));
   na("[data-vec]", (b) => dodajSlike(b.dataset.vec, [...b.files]));
   na("[data-done]", async (b) => { await setStatus(b.dataset.done, "opravljeno"); ocenaSheet(b.dataset.done, "M"); });
+  na("[data-napoti]", async (b) => {
+    b.disabled = true;
+    try { await call("naPoti", { id: b.dataset.napoti }); toast("Stranka je obveščena", "Ve, da si na poti."); }
+    catch (e) { b.disabled = false; toast("Ni uspelo", e.message || "Preveri internet in poskusi znova."); }
+  });
   na("[data-oceni]", (b) => ocenaSheet(b.dataset.oceni, prefs.role === "M" ? "N" : "M"));
   na("[data-neocenim]", (b) => { prefs.neOcenim = [...(prefs.neOcenim || []), b.dataset.neocenim].slice(-50); savePrefs(); renderM(); });
   na("[data-ocene]", (b) => oceneSheet(b.dataset.ocene));

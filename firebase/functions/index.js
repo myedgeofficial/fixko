@@ -222,7 +222,7 @@ exports.odpovej = onCall(async (req) => {
       else if (x.data().status === "odlozeno" || (celo && x.data().status === "caka")) t.update(x.ref, { status: celo ? "zavrnjeno" : "caka" });
     }
     const brez = { mojster: FieldValue.delete(), mojsterIme: FieldValue.delete(), mojsterFirma: FieldValue.delete(), mojsterDavcna: FieldValue.delete(),
-      mojsterSlika: FieldValue.delete(), termin: FieldValue.delete(), cena: FieldValue.delete(), prevzeto: FieldValue.delete() };
+      mojsterSlika: FieldValue.delete(), termin: FieldValue.delete(), cena: FieldValue.delete(), prevzeto: FieldValue.delete(), naPoti: FieldValue.delete(), opomnik: FieldValue.delete() };
     t.update(dRef, { ...(dd.status === "prevzeto" ? brez : {}), status: celo && stranka ? "preklicano" : "odprto", odpovedano: FieldValue.serverTimestamp() });
     if (k.exists) t.update(kRef, { mojsterTel: FieldValue.delete() });
     return { dd, kontakt: k.exists ? k.data() : {}, md: m?.exists ? m.data() : {}, stranka, ostale: vse.docs.filter((x) => x.ref.path !== izbrana && x.data().status === "odlozeno").length };
@@ -290,6 +290,73 @@ exports.oceni = onCall(async (req) => {
     if (m.exists && m.data().push) await sendApns([m.data().push], "Stranka vas je ocenila: " + "★".repeat(zvezdice), "Če želite, v Popravku ocenite še stranko.", { vloga: "M", delo: id }).catch(() => {});
   }
   return { ok: true };
+});
+
+// Mojster sporoči, da je na poti; stranka dobi obvestilo.
+exports.naPoti = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const id = String(req.data?.id || "");
+  const dRef = db.doc("dela/" + id);
+  const d = await dRef.get();
+  if (!d.exists || d.data().mojster !== uid || d.data().status !== "prevzeto") throw new HttpsError("failed-precondition", "To ni tvoj termin.");
+  await dRef.update({ naPoti: FieldValue.serverTimestamp() });
+  const k = await dRef.collection("zasebno").doc("kontakt").get();
+  if (k.exists && k.data().push) await sendApns([k.data().push], (d.data().mojsterIme || "Mojster") + " je na poti", (d.data().opis || strokaIme(d.data().stroka)) + ". Kmalu bo pri vas.", { vloga: "N", delo: id });
+  return { ok: true };
+});
+
+/* ---------- samodejni opomniki (vsakih 10 minut) ---------- */
+// Sosednje regije: če se v 2 urah nihče ne javi, obvestimo še mojstre iz okolice.
+const SOSEDNJE = {
+  lj: ["kr", "za", "nm", "po"], mb: ["ms", "sg", "ce"], ce: ["mb", "sg", "za", "kk", "lj"], kr: ["lj", "ng"],
+  kp: ["ng", "po"], nm: ["lj", "kk", "za", "po"], ms: ["mb"], ng: ["kr", "kp", "po"], sg: ["mb", "ce"],
+  kk: ["nm", "za", "ce"], za: ["lj", "ce", "kk", "nm"], po: ["lj", "kp", "ng", "nm"]
+};
+const uraSlo = () => Number(new Intl.DateTimeFormat("sl-SI", { hour: "numeric", hourCycle: "h23", timeZone: "Europe/Ljubljana" }).format(new Date()));
+const pushStranke = async (id) => (await db.doc("dela/" + id + "/zasebno/kontakt").get()).data()?.push;
+const pushMojstra = async (uid) => (uid ? (await db.doc("mojstri/" + uid).get()).data()?.push : null);
+exports.opomniki = onSchedule({ schedule: "every 10 minutes", region: "europe-west1", timeoutSeconds: 120 }, async () => {
+  const now = Date.now(), H = 3600e3, mirno = uraSlo() < 8 || uraSlo() >= 21; // ponoči ne motimo
+  const prevzeta = await db.collection("dela").where("status", "==", "prevzeto").get();
+  for (const d of prevzeta.docs) {
+    const j = d.data(), t = Number(j.termin), o = j.opomnik || {}, opis = j.opis || strokaIme(j.stroka);
+    if (!t) continue;
+    const ostane = t - now;
+    // Dan prej (samo če je bil termin dogovorjen vsaj dan vnaprej) in uro prej.
+    if (!o.dan && ostane <= 24 * H && ostane > 3 * H && (j.prevzeto?.toMillis() || now) <= t - 24 * H) {
+      await d.ref.update({ "opomnik.dan": true });
+      await sendApns([await pushStranke(d.id)], "Jutri pride " + (j.mojsterIme || "mojster"), opis + ", " + opisTermina(t) + ".", { vloga: "N", delo: d.id }).catch(() => {});
+      await sendApns([await pushMojstra(j.mojster)], "Jutri imaš termin", opis + ", " + j.kraj + ", " + opisTermina(t) + ".", { vloga: "M", delo: d.id }).catch(() => {});
+    }
+    if (!o.ura && ostane <= 65 * 60e3 && ostane > 0) {
+      await d.ref.update({ "opomnik.ura": true });
+      await sendApns([await pushStranke(d.id)], (j.mojsterIme || "Mojster") + " pride čez dobro uro", opis + ".", { vloga: "N", delo: d.id }).catch(() => {});
+      await sendApns([await pushMojstra(j.mojster)], "Termin čez dobro uro", opis + ", " + j.kraj + ".", { vloga: "M", delo: d.id }).catch(() => {});
+    }
+    // Dan po terminu: ali je bilo delo opravljeno? (stranka potrdi in oceni mojstra)
+    if (!o.ocena && !mirno && ostane < -20 * H && ostane > -7 * 24 * H) {
+      await d.ref.update({ "opomnik.ocena": true });
+      await sendApns([await pushStranke(d.id)], "Je bilo delo opravljeno?", "Tapnite Delo je opravljeno in ocenite " + (j.mojsterIme || "mojstra") + ".", { vloga: "N", delo: d.id }).catch(() => {});
+    }
+  }
+  if (mirno) return;
+  const odprta = await db.collection("dela").where("status", "==", "odprto").get();
+  for (const d of odprta.docs) {
+    const j = d.data(), star = now - (j.ustvarjeno?.toMillis() || now);
+    if (j.sosednje || j.ponudb || star < 2 * H || star > 26 * H || !SOSEDNJE[j.regija]) continue;
+    const sos = SOSEDNJE[j.regija];
+    await d.ref.update({ sosednje: sos });
+    const snap = await db.collection("mojstri").where("stroke", "array-contains", j.stroka).get();
+    const novi = snap.docs.filter((m) => {
+      const md = m.data(), reg = md.regije || [];
+      return m.id !== j.lastnik && md.narocninaDo?.toMillis() > now && !reg.includes("vsa") && !reg.includes(j.regija) && reg.some((r) => sos.includes(r));
+    });
+    if (!novi.length) continue;
+    await d.ref.update({ obvesceni: FieldValue.increment(novi.length) });
+    await sendApns(novi.map((m) => m.data().push), "Delo v bližini: " + (j.opis || strokaIme(j.stroka)), [j.kraj, j.kdaj].filter(Boolean).join(" · ") + ". Nihče se še ni javil.", { vloga: "M", delo: d.id }).catch(() => {});
+    await sendApns([await pushStranke(d.id)], "Obvestili smo še mojstre iz okolice", (j.opis || strokaIme(j.stroka)) + ". Ko se kdo javi, dobite obvestilo.", { vloga: "N", delo: d.id }).catch(() => {});
+  }
 });
 
 // Mojster prosi stranko za več slik (neobvezno z navodilom, kaj naj slika).
