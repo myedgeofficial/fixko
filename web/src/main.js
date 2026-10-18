@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { zacniSnemanje } from "./glas.js";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { Preferences } from "@capacitor/preferences";
 import { Geolocation } from "@capacitor/geolocation";
@@ -150,7 +151,7 @@ function pomocSheet() {
   const d = document.createElement("div"); d.className = "sheet";
   d.innerHTML = `<div role="dialog" aria-label="Kako deluje"><h2 style="margin-top:0">Kako deluje</h2>
     ${koraki(r)}
-    ${r === "N" ? `<p class="lead">Ne veste, kateri mojster? Samo opišite težavo, Popravko izbere sam. Ne veste, kako napisati? Tapnite mikrofon na tipkovnici in povejte.</p>` : `<p class="lead">Stranka vidi tvojo sliko, ime, podjetje in davčno številko, zato ti lažje zaupa.</p>`}
+    ${r === "N" ? `<p class="lead">Ne veste, kateri mojster? Samo opišite težavo, Popravko izbere sam. Ne veste, kako napisati? Tapnite Povejte in opišite z glasom.</p>` : `<p class="lead">Stranka vidi tvojo sliko, ime, podjetje in davčno številko, zato ti lažje zaupa.</p>`}
     <p class="lead">Vprašanja: <a class="link" href="mailto:urska.repusic@gmail.com">urska.repusic@gmail.com</a></p>
     <button class="btn" type="button" id="x">Razumem</button></div>`;
   document.body.appendChild(d);
@@ -207,7 +208,7 @@ function renderN() {
     <input id="file" type="file" accept="image/*" hidden>
     <label for="opis" class="big">Na kratko opišite</label>
     <textarea id="opis" rows="2" maxlength="200" placeholder="npr. Pušča pipa v kuhinji">${esc(draft.opis)}</textarea>
-    <p class="hint">Lahko tudi poveste: tapnite mikrofon na tipkovnici.</p>${naprej()}${aktivna.length ? "" : prejsnja}`;
+    <button class="btn ghost glas" type="button" id="glas">${ikona("mikrofon", 22)} Povejte z glasom</button>${naprej()}${aktivna.length ? "" : prejsnja}`;
   else if (k === 2) { if (!draft.cat) draft.izberi = true; html = `<h1>Kdo in kam?</h1><div id="stroka"></div><div id="kraj"></div>${naprej()}`; }
   else if (k === 3) html = `<h1>Kdaj naj pride mojster?</h1>${chipi("kdaj", KDAJ, draft.kdaj)}`;
   else if (k === 4) html = `<h1>Koliko približno želite plačati?</h1><p class="lead">Samo okvirno, da se mojster lažje odloči. Točno ceno se dogovorite z njim.</p>${chipi("budget", BUDGET, draft.budget)}`;
@@ -228,6 +229,27 @@ function renderN() {
   if (k === 1) {
     const opis = document.getElementById("opis");
     opis.oninput = () => { draft.opis = opis.value; if (!draft.catRocno) draft.cat = prepoznajStroko(draft.opis); };
+    // Glas: tap začne snemanje, drugi tap ustavi, besedilo se samo izpiše v polje.
+    const gb = document.getElementById("glas");
+    let ustavi = null;
+    const gumb = (html, cls) => { gb.innerHTML = html; gb.className = "btn glas " + cls; };
+    gb.onclick = async () => {
+      if (ustavi) { ustavi(); ustavi = null; return; }
+      try {
+        ustavi = await zacniSnemanje(async ({ b64, sekund }) => {
+          ustavi = null;
+          if (sekund < 0.6) return gumb(`${ikona("mikrofon", 22)} Povejte z glasom`, "ghost");
+          gumb("Prepisujem ...", "ghost"); gb.disabled = true;
+          try {
+            const r = await call("prepisi", { zvok: b64 });
+            if (r.besedilo) { opis.value = (opis.value.trim() ? opis.value.trim() + " " : "") + r.besedilo; opis.dispatchEvent(new Event("input")); }
+            else toast("Nisem razumel", "Poskusite znova bližje telefonu.");
+          } catch (e) { toast("Prepis ni uspel", e.message || "Preverite internet in poskusite znova."); }
+          gb.disabled = false; gumb(`${ikona("mikrofon", 22)} Povejte z glasom`, "ghost");
+        });
+        gumb(`<span class="rec"></span> Govorite ... tapnite za konec`, "snema");
+      } catch (e) { toast("Mikrofon ni dovoljen", "Dovolite ga v Nastavitve > Popravko > Mikrofon."); }
+    };
     document.getElementById("file").onchange = (e) => {
       const fl = e.target.files[0]; if (!fl) return;
       shrink(fl).then(({ url, blob }) => { draft.photo = url; draft.blob = blob; renderN(); }).catch(() => toast("Slike ni bilo mogoče odpreti", "Poskusite z drugo sliko."));

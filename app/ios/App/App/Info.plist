@@ -32,6 +32,8 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Popravko posname vaš glas, da ga prepiše v opis dela. Posnetka ne shranjujemo.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Popravko iz lokacije prepozna vaš kraj, da pošlje delo mojstrom v vaši bližini. Lokacije ne shranjujemo.</string>
 	<key>NSLocationAlwaysUsageDescription</key>

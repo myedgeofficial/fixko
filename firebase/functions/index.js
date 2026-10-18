@@ -359,6 +359,32 @@ exports.opomniki = onSchedule({ schedule: "every 10 minutes", region: "europe-we
   }
 });
 
+// Prepis glasu v besedilo (Google Speech-to-Text, slovenščina). Največ 30 s, omejeno na 30 prepisov na dan na uporabnika.
+exports.prepisi = onCall({ memory: "512MiB" }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const zvok = String(req.data?.zvok || "");
+  if (!zvok || zvok.length > 1400000) throw new HttpsError("invalid-argument", "Posnetek je predolg (največ 30 sekund).");
+  const dan = new Date().toISOString().slice(0, 10), oRef = db.doc("omejitve/" + uid);
+  await db.runTransaction(async (t) => {
+    const o = (await t.get(oRef)).data() || {};
+    const st = o.dan === dan ? o.prepisov || 0 : 0;
+    if (st >= 30) throw new HttpsError("resource-exhausted", "Danes ste porabili vse prepise. Napišite z roko.");
+    t.set(oRef, { dan, prepisov: st + 1 }, { merge: true });
+  });
+  const { GoogleAuth } = require("google-auth-library");
+  const zeton = await (await new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] }).getClient()).getAccessToken();
+  const r = await fetch("https://eu-speech.googleapis.com/v1/speech:recognize", {
+    method: "POST", headers: { Authorization: "Bearer " + zeton.token, "content-type": "application/json" },
+    body: JSON.stringify({ config: { encoding: "LINEAR16", sampleRateHertz: 16000, languageCode: "sl-SI", maxAlternatives: 1 }, audio: { content: zvok } })
+  });
+  const j = await r.json();
+  if (!r.ok) { console.error("prepis", r.status, JSON.stringify(j).slice(0, 500)); throw new HttpsError("internal", "Prepis trenutno ne deluje."); }
+  let besedilo = (j.results || []).map((x) => x.alternatives?.[0]?.transcript || "").join(" ").replace(/\s+/g, " ").trim();
+  if (besedilo) besedilo = besedilo[0].toUpperCase() + besedilo.slice(1);
+  return { besedilo: besedilo.slice(0, 200) };
+});
+
 // Mojster prosi stranko za več slik (neobvezno z navodilom, kaj naj slika).
 exports.prosiSlike = onCall(async (req) => {
   const uid = req.auth?.uid;

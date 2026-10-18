@@ -310,3 +310,8 @@ header::after{content:"";position:absolute;left:0;right:0;bottom:4px;height:3px;
 .oceni-kartica b{display:block}
 .oceni-kartica span{color:var(--muted)}
 .oceni-kartica .row .btn{flex:1}
+/* Snemanje glasu */
+.btn.glas{margin-top:10px}
+.btn.glas.snema{background:#FFF1EC !important;color:#C2410C;border:1.5px solid #FDBA9B;box-shadow:none}
+.rec{width:12px;height:12px;border-radius:50%;background:#E5484D;display:inline-block;animation:utrip 1s infinite}
+@keyframes utrip{50%{opacity:.25}}
