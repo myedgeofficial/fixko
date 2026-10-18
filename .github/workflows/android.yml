@@ -79,6 +79,9 @@ jobs:
           ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/Fixko.apk"
           ls -la "$RUNNER_TEMP/Fixko.apk"
+          # Paket za Google Play (AAB); pred oddajo ga podpišemo z naloži-ključem.
+          ./gradlew --no-daemon bundleRelease
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/Popravko.aab"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -93,10 +96,10 @@ jobs:
           # Izdajo samo posodobimo (ne brišemo), da povezava za prenos nikoli ne izgine.
           NOTES="Testna verzija 1.0.$FIXKO_VERSION_CODE. Prenesi Fixko.apk na telefonu in ga odpri (dovoli namestitev iz brskalnika)."
           if gh release view android >/dev/null 2>&1; then
-            gh release upload android "$RUNNER_TEMP/Fixko.apk" --clobber
+            gh release upload android "$RUNNER_TEMP/Fixko.apk" "$RUNNER_TEMP/Popravko.aab" --clobber
             gh release edit android --draft=false --prerelease --title "Popravko za Android (test)" --notes "$NOTES"
           else
-            gh release create android "$RUNNER_TEMP/Fixko.apk" --prerelease --target "$GITHUB_SHA" --title "Popravko za Android (test)" --notes "$NOTES"
+            gh release create android "$RUNNER_TEMP/Fixko.apk" "$RUNNER_TEMP/Popravko.aab" --prerelease --target "$GITHUB_SHA" --title "Popravko za Android (test)" --notes "$NOTES"
           fi
           curl -sfI -L "https://github.com/${GITHUB_REPOSITORY}/releases/download/android/Fixko.apk" -o /dev/null || { echo "::error::Povezava za prenos ne deluje"; exit 1; }
           echo "::notice::https://github.com/${GITHUB_REPOSITORY}/releases/download/android/Fixko.apk"
