@@ -236,6 +236,33 @@ exports.odpovej = onCall(async (req) => {
   return { ok: true };
 });
 
+// Stranka izbriše naročilo (eno ali več) v katerem koli stanju. Mojster, ki je prišel, dobi obvestilo.
+exports.izbrisiDelo = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const ids = [...new Set((Array.isArray(req.data?.ids) ? req.data.ids : [req.data?.id]).map((x) => String(x || "")).filter(Boolean))].slice(0, 50);
+  if (!ids.length) throw new HttpsError("invalid-argument", "Ni naročila.");
+  for (const id of ids) {
+    const dRef = db.doc("dela/" + id);
+    const d = await dRef.get();
+    if (!d.exists) continue;
+    const dd = d.data();
+    if (dd.lastnik !== uid) throw new HttpsError("permission-denied", "To ni vaše naročilo.");
+    if (dd.status === "prevzeto" && dd.mojster) {
+      const m = await db.doc("mojstri/" + dd.mojster).get();
+      if (m.exists && m.data().push) await sendApns([m.data().push], "Stranka je preklicala naročilo", (dd.opis || strokaIme(dd.stroka)) + ", " + dd.kraj + ". Ne hodite tja.", { vloga: "M", delo: id }).catch(() => {});
+    }
+    const pon = await db.collection("ponudbe").where("delo", "==", id).get();
+    const batch = db.batch();
+    pon.docs.forEach((x) => batch.delete(x.ref));
+    batch.delete(dRef.collection("zasebno").doc("kontakt"));
+    batch.delete(dRef);
+    await batch.commit();
+    await admin.storage().bucket().deleteFiles({ prefix: "slike/" + uid + "/" + id }).catch((e) => console.warn("slike", e.message));
+  }
+  return { ok: true };
+});
+
 // Mojster prosi stranko za več slik (neobvezno z navodilom, kaj naj slika).
 exports.prosiSlike = onCall(async (req) => {
   const uid = req.auth?.uid;

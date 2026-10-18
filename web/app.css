@@ -277,7 +277,7 @@ em.prev{margin-top:4px;font-size:14px}
 .logo img{border-radius:12px;box-shadow:0 2px 10px rgba(3,80,68,.18)}
 header{position:relative}
 header::after{content:"";position:absolute;left:0;right:0;bottom:4px;height:3px;border-radius:3px;background:var(--brand);opacity:.85}
-.btn:not(.ghost):not(.danger){background:var(--btn);box-shadow:0 4px 14px rgba(3,122,104,.25)}
+.btn:not(.ghost):not(.danger):not(.izbrisi){background:var(--btn);box-shadow:0 4px 14px rgba(3,122,104,.25)}
 .switch button[aria-pressed="true"]{background:var(--btn);box-shadow:0 3px 10px rgba(3,122,104,.25)}
 .izbira:first-of-type{background:var(--btn)}
 .izbira{border-color:#9FD9CC}
@@ -289,3 +289,6 @@ header::after{content:"";position:absolute;left:0;right:0;bottom:4px;height:3px;
 .korak span{color:#fff;background:linear-gradient(135deg,#FD4F00,#FF8A00)}
 .znacka{color:#fff;background:linear-gradient(135deg,#FD4F00,#FF8A00)}
 .av{box-shadow:0 0 0 2px var(--surface),0 0 0 4px #FF8A00}
+/* Izbris naročila: jasno viden, a miren gumb na dnu podrobnosti */
+.btn.izbrisi{background:#FFF4F2;color:var(--danger);border:1.5px solid #F0C9C4;box-shadow:none;margin-top:18px}
+.stara [data-pocisti]{display:block;margin:10px auto 0}

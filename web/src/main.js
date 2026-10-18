@@ -189,7 +189,7 @@ function renderN() {
   const aktivna = S.myJobs.filter((j) => j.status === "odprto" || j.status === "prevzeto");
   const stara = S.myJobs.filter((j) => !aktivna.includes(j));
   const k = draft.korak || (aktivna.length ? 0 : 1);
-  const prejsnja = stara.length ? `<details class="stara"><summary>Prejšnja naročila (${stara.length})</summary><div class="list">${stara.map(cardN).join("")}</div></details>` : "";
+  const prejsnja = stara.length ? `<details class="stara"><summary>Prejšnja naročila (${stara.length})</summary><div class="list">${stara.map(cardN).join("")}</div><button class="link muted" type="button" data-pocisti>Izbriši vsa prejšnja</button></details>` : "";
   if (!k) {
     view.innerHTML = `<h1>Vaša naročila</h1><div class="list">${aktivna.map(cardN).join("")}</div>
       <button class="btn big" type="button" id="novo">+ Novo naročilo</button>${prejsnja}`;
@@ -346,7 +346,7 @@ function detN(j) {
     ${k.mojsterTel ? `<div class="row"><span class="phone">${esc(k.mojsterTel)}</span><a class="btn small" href="tel:${esc(k.mojsterTel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
     <button class="btn ghost" type="button" data-done="${j.id}">Delo je opravljeno</button>
-    <div class="row"><button class="link" type="button" data-zamenjaj="${j.id}">Zamenjaj mojstra</button><button class="link" type="button" data-cancel="${j.id}">Prekliči naročilo</button></div>
+    <div class="row"><button class="link" type="button" data-zamenjaj="${j.id}">Zamenjaj mojstra</button></div>
     <div class="row"><button class="link muted" type="button" data-prijavim="${j.id}">Prijavi mojstra</button></div>`;
   else {
     const pon = S.ponudbe.filter((p) => p.delo === j.id && p.status === "caka");
@@ -355,14 +355,14 @@ function detN(j) {
         <div class="pogoj"><span>Lahko pride</span><b>${esc(opisTermina(p.termin))}</b></div>${p.cena ? `<div class="pogoj"><span>Okvirna cena</span><b>${esc(p.cena)}</b></div>` : ""}
         <div class="row"><button class="btn small" type="button" data-sprejmi="${j.id}" data-m="${esc(p.mojster)}">Sprejmi</button><button class="btn small ghost" type="button" data-zavrni="${j.id}" data-m="${esc(p.mojster)}">Zavrni</button></div></div>`).join("")}`
       : `<div class="status"><span class="dot"></span>${j.obvesceni ? `Obvestili smo ${mojstrov(j.obvesceni)}, čakamo, da se kdo javi ...` : "Čakamo, da se javi mojster ..."}</div>`)
-      + `<div class="row"><button class="link" type="button" data-cancel="${j.id}">Prekliči naročilo</button></div>`;
+      ;
   }
   const n = { odprto: 1, prevzeto: 2, opravljeno: 3 }[j.status] || 0;
   const aktivno = j.status === "odprto" || j.status === "prevzeto";
   const slike = aktivno ? `${j.prosnja ? `<div class="prosnja">${ikona("kamera", 22)}<div><b>${esc(j.prosnja.ime)} prosi za več slik</b>${j.prosnja.sporocilo ? `<span>»${esc(j.prosnja.sporocilo)}«</span>` : ""}</div></div>` : ""}
     <label class="btn ${j.prosnja ? "" : "ghost"}" for="vec-${j.id}">${ikona("kamera", 22)} Dodaj slike</label><input id="vec-${j.id}" data-vec="${j.id}" type="file" accept="image/*" multiple hidden>` : "";
   const pot = n ? `<ol class="pot">${["Poslano", "Mojster prihaja", "Opravljeno"].map((t, i) => `<li class="${i < n ? "da" : ""}${i === n - 1 ? " zdaj" : ""}"><span>${i < n ? ikona("kljukica", 14, 3) : ""}</span>${t}</li>`).join("")}</ol>` : "";
-  return `${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${pot}${st}${slike}</div>`;
+  return `${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3><div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>${pot}${st}${slike}<button class="btn izbrisi" type="button" data-cancel="${j.id}" data-s="${j.status}">${ikona("smeti", 20)} Izbriši naročilo</button></div>`;
 }
 const tag = (k) => `<span class="tag">${ikona(k, 16, 2.2)}${strokaIme(k)}</span>`;
 async function dodajSlike(id, files) {
@@ -530,7 +530,8 @@ function vezi(root) {
   na("[data-zavrni]", (b) => odgovori(b, false));
   na("[data-vec]", (b) => dodajSlike(b.dataset.vec, [...b.files]));
   na("[data-done]", (b) => setStatus(b.dataset.done, "opravljeno"));
-  na("[data-cancel]", (b) => potrdiSheet("Prekličem naročilo?", "Mojstri ga ne bodo več videli.", "Da, prekliči", () => odpovej(b.dataset.cancel, true)));
+  na("[data-cancel]", (b) => potrdiSheet("Izbrišem naročilo?", b.dataset.s === "prevzeto" ? "Mojster dobi obvestilo, da naj ne pride. Naročilo izgine." : b.dataset.s === "odprto" ? "Mojstri ga ne bodo več videli. Naročilo izgine." : "Naročilo izgine s seznama.", "Da, izbriši", () => izbrisiDela([b.dataset.cancel])));
+  na("[data-pocisti]", () => { const ids = S.myJobs.filter((j) => j.status !== "odprto" && j.status !== "prevzeto").map((j) => j.id); potrdiSheet("Izbrišem vsa prejšnja naročila?", `Izbrisanih bo ${ids.length}.`, "Da, izbriši vse", () => izbrisiDela(ids)); });
   na("[data-zamenjaj]", (b) => potrdiSheet("Zamenjam mojstra?", "Temu mojstru odpoveste termin. Naročilo ostane objavljeno, druge ponudbe se vrnejo in izberete lahko drugega mojstra.", "Da, zamenjaj", () => odpovej(b.dataset.zamenjaj, false)));
   na("[data-koledar]", (b) => vKoledar(vsaDela(b.dataset.koledar), prefs.role));
   na("[data-prijavim]", (b) => prijaviSheet({ delo: b.dataset.prijavim, kdo: "mojster" }));
@@ -568,6 +569,15 @@ function potrdiSheet(naslov, besedilo, gumb, akcija) {
   d.onclick = (e) => { if (e.target === d) d.remove(); };
   d.querySelector("#x").onclick = () => d.remove();
   d.querySelector("#da").onclick = () => { d.remove(); akcija(); };
+}
+async function izbrisiDela(ids) {
+  try {
+    await call("izbrisiDelo", { ids });
+    S.myJobs = S.myJobs.filter((j) => !ids.includes(j.id));
+    document.querySelectorAll(".sheet").forEach((d) => d.remove());
+    toast(ids.length > 1 ? "Naročila so izbrisana" : "Naročilo je izbrisano", "");
+    renderN();
+  } catch (e) { toast("Ni uspelo", e.message || "Preverite internet in poskusite znova."); }
 }
 async function odpovej(id, celo) {
   try {
