@@ -135,7 +135,7 @@ const koraki = (r) => `<ol class="koraki">${KORAKI[r].map(([ik, t, m], i) => `<l
 function renderUvod() {
   view.innerHTML = `
   <div class="uvod">
-    <img src="logo.png" width="88" height="88" alt="">
+    <img src="logo-velik.png" width="150" height="150" alt="Popravko">
     <h1>Mojster na vašem domu</h1>
     <p class="lead">Pipa pušča, luč ne gori, vrata škripajo? Popravko poišče mojstra v vaši bližini.</p>
   </div>

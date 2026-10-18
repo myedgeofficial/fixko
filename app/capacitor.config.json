@@ -4,7 +4,7 @@
   "webDir": "www",
   "ios": {
     "contentInset": "never",
-    "backgroundColor": "#F3F5F4"
+    "backgroundColor": "#F3FAF7"
   },
   "plugins": {
     "PushNotifications": {
@@ -16,6 +16,6 @@
     }
   },
   "android": {
-    "backgroundColor": "#F3F5F4"
+    "backgroundColor": "#F3FAF7"
   }
 }

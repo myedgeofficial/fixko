@@ -15,7 +15,7 @@ esbuild.buildSync({
   outfile: path.join(out, "app.js"), legalComments: "none", logLevel: "warning",
   nodePaths: [path.resolve(__dirname, "..", "node_modules")]
 });
-for (const f of ["index.html", "app.css", "zasebnost.html", "pogoji.html", "logo.png"]) fs.copyFileSync(path.join(web, f), path.join(out, f));
+for (const f of ["index.html", "app.css", "zasebnost.html", "pogoji.html", "logo.png", "logo-velik.png"]) fs.copyFileSync(path.join(web, f), path.join(out, f));
 
 // Android: obvestila (FCM) delujejo samo, če je zraven google-services.json.
 const gs = path.resolve(__dirname, "..", "android", "app", "google-services.json");
