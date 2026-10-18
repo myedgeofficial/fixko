@@ -100,6 +100,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Ocene po opravljenem delu in povprečje na osebo. Vidijo jih vsi, piše samo strežnik (funkcija oceni).
+    match /ocene/{id} {
+      allow read: if prijavljen();
+    }
+    match /profili/{uid} {
+      allow read: if prijavljen();
+    }
+
     // Podatki za potrditveno nakazilo (IBAN, prejemnik). Piše samo strežnik.
     match /nastavitve/placilo {
       allow read: if prijavljen();

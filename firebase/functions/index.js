@@ -263,6 +263,35 @@ exports.izbrisiDelo = onCall(async (req) => {
   return { ok: true };
 });
 
+// Ocena po opravljenem delu: stranka oceni mojstra (M), mojster lahko (neobvezno) oceni stranko (N). Vsak enkrat.
+exports.oceni = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const id = String(req.data?.id || ""), zvezdice = Number(req.data?.zvezdice), komentar = String(req.data?.komentar || "").trim().slice(0, 200);
+  if (!id || !Number.isInteger(zvezdice) || zvezdice < 1 || zvezdice > 5) throw new HttpsError("invalid-argument", "Izberite od 1 do 5 zvezdic.");
+  const dRef = db.doc("dela/" + id);
+  const r = await db.runTransaction(async (t) => {
+    const d = await t.get(dRef);
+    if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
+    const dd = d.data();
+    const smer = dd.lastnik === uid ? "M" : dd.mojster && dd.mojster === uid ? "N" : "";
+    if (!smer) throw new HttpsError("permission-denied", "To ni vaše delo.");
+    if (dd.status !== "opravljeno" || !dd.mojster) throw new HttpsError("failed-precondition", "Oceniti je mogoče šele opravljeno delo.");
+    const za = smer === "M" ? dd.mojster : dd.lastnik;
+    const oRef = db.doc("ocene/" + id + "_" + smer);
+    if ((await t.get(oRef)).exists) throw new HttpsError("already-exists", "Ocena je že oddana.");
+    t.set(oRef, { za, vloga: smer, zvezdice, komentar, stroka: dd.stroka || "", kraj: dd.kraj || "", cas: FieldValue.serverTimestamp() });
+    t.set(db.doc("profili/" + za), { vsota: FieldValue.increment(zvezdice), st: FieldValue.increment(1) }, { merge: true });
+    t.update(dRef, { ["ocene." + smer]: zvezdice });
+    return { smer, dd };
+  });
+  if (r.smer === "M") {
+    const m = await db.doc("mojstri/" + r.dd.mojster).get();
+    if (m.exists && m.data().push) await sendApns([m.data().push], "Stranka vas je ocenila: " + "★".repeat(zvezdice), "Če želite, v Popravku ocenite še stranko.", { vloga: "M", delo: id }).catch(() => {});
+  }
+  return { ok: true };
+});
+
 // Mojster prosi stranko za več slik (neobvezno z navodilom, kaj naj slika).
 exports.prosiSlike = onCall(async (req) => {
   const uid = req.auth?.uid;
@@ -445,6 +474,8 @@ exports.izbrisi = onCall(async (req) => {
   const prevzeta = await db.collection("dela").where("mojster", "==", uid).get();
   await Promise.all(prevzeta.docs.map((d) => d.ref.collection("zasebno").doc("kontakt").set({ mojsterTel: FieldValue.delete() }, { merge: true })));
   await Promise.all(prevzeta.docs.map((d) => d.ref.update({ mojsterSlika: FieldValue.delete(), mojsterDavcna: FieldValue.delete() })));
+  const oc = await db.collection("ocene").where("za", "==", uid).get();
+  await Promise.all([...oc.docs.map((d) => d.ref.delete()), db.doc("profili/" + uid).delete()]);
   await admin.storage().bucket().deleteFiles({ prefix: "slike/" + uid + "/" }).catch((e) => console.warn("slike", e.message));
   await admin.storage().bucket().deleteFiles({ prefix: "profil/" + uid + "/" }).catch((e) => console.warn("profil", e.message));
   await admin.auth().deleteUser(uid).catch(() => {});

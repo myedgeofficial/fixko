@@ -5,7 +5,7 @@ import { Geolocation } from "@capacitor/geolocation";
 import { initializeApp } from "firebase/app";
 import { initializeAuth, indexedDBLocalPersistence, signInAnonymously, onAuthStateChanged, connectAuthEmulator } from "firebase/auth";
 import {
-  initializeFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit,
+  initializeFirestore, doc, getDoc, getDocs, setDoc, updateDoc, collection, query, where, orderBy, limit,
   onSnapshot, serverTimestamp, connectFirestoreEmulator
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
@@ -66,7 +66,7 @@ function initFb() {
 const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
 
 /* ---------- stanje ---------- */
-const S = { ponudbe: [], moje: {}, myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true };
+const S = { ponudbe: [], moje: {}, myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true, profili: {} };
 let draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "" };
 const unsub = [];
 
@@ -339,10 +339,11 @@ const preverjenoZnak = `<em class="prev">${ikona("kljukica", 14, 3)} Podjetje pr
 function detN(j) {
   const k = S.kontakti[j.id] || {};
   let st;
-  if (j.status === "opravljeno") st = `<div class="status"><span class="dot off"></span>Opravljeno</div>`;
+  if (j.status === "opravljeno") st = `<div class="status"><span class="dot off"></span>Opravljeno${j.mojsterIme ? `: ${esc(j.mojsterIme)}` : ""}</div>`
+    + (!j.mojster ? "" : j.ocene?.M ? `<div class="vasa">Vaša ocena <span class="zv">${zvezde(j.ocene.M)}</span></div>` : `<button class="btn" type="button" data-oceni="${j.id}">${ikona("zvezda", 22)} Ocenite mojstra</button>`);
   else if (j.status === "preklicano") st = `<div class="status"><span class="dot off"></span>Preklicano</div>`;
   else if (j.status === "prevzeto") st = `<div class="status"><span class="dot ok"></span>Mojster pride ${esc(opisTermina(j.termin))}</div>
-    <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}${j.mojsterPreverjen ? preverjenoZnak : ""}</div></div>
+    <div class="mojster">${j.mojsterSlika ? `<img src="${esc(j.mojsterSlika)}" alt="">` : ""}<div><b>${esc(j.mojsterIme || "Mojster")}</b>${ocenaZnak(j.mojster)}${j.mojsterFirma ? `<span>${esc(j.mojsterFirma)}</span>` : ""}${j.mojsterDavcna ? `<small>Davčna številka ${esc(j.mojsterDavcna)}</small>` : ""}${j.mojsterPreverjen ? preverjenoZnak : ""}</div></div>
     ${k.mojsterTel ? `<div class="row"><span class="phone">${esc(k.mojsterTel)}</span><a class="btn small" href="tel:${esc(k.mojsterTel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
     <button class="btn ghost" type="button" data-done="${j.id}">Delo je opravljeno</button>
@@ -351,7 +352,7 @@ function detN(j) {
   else {
     const pon = S.ponudbe.filter((p) => p.delo === j.id && p.status === "caka");
     st = (pon.length ? `<div class="status"><span class="dot ok"></span>${pon.length === 1 ? "Javil se je mojster. Potrdite ga ali zavrnite." : `Javilo se je ${mojstrov(pon.length).replace("mojstre", "mojstrov")}. Izberite enega.`}</div>
-      ${pon.map((p) => `<div class="ponudba"><div class="mojster">${p.slika ? `<img src="${esc(p.slika)}" alt="">` : ""}<div><b>${esc(p.ime)}</b><span>${esc(p.firma)}</span>${p.davcna ? `<small>Davčna številka ${esc(p.davcna)}</small>` : ""}${p.preverjen ? preverjenoZnak : ""}</div></div>
+      ${pon.map((p) => `<div class="ponudba"><div class="mojster">${p.slika ? `<img src="${esc(p.slika)}" alt="">` : ""}<div><b>${esc(p.ime)}</b>${ocenaZnak(p.mojster)}<span>${esc(p.firma)}</span>${p.davcna ? `<small>Davčna številka ${esc(p.davcna)}</small>` : ""}${p.preverjen ? preverjenoZnak : ""}</div></div>
         <div class="pogoj"><span>Lahko pride</span><b>${esc(opisTermina(p.termin))}</b></div>${p.cena ? `<div class="pogoj"><span>Okvirna cena</span><b>${esc(p.cena)}</b></div>` : ""}
         <div class="row"><button class="btn small" type="button" data-sprejmi="${j.id}" data-m="${esc(p.mojster)}">Sprejmi</button><button class="btn small ghost" type="button" data-zavrni="${j.id}" data-m="${esc(p.mojster)}">Zavrni</button></div></div>`).join("")}`
       : `<div class="status"><span class="dot"></span>${j.obvesceni ? `Obvestili smo ${mojstrov(j.obvesceni)}, čakamo, da se kdo javi ...` : "Čakamo, da se javi mojster ..."}</div>`)
@@ -437,8 +438,11 @@ function renderM() {
   const prosta = prostaDela();
   const moja = S.taken.filter((j) => j.status === "prevzeto");
   // Kot Instagram: zgoraj krogci z mojimi termini, spodaj objave prostih del.
+  const zaOceno = S.taken.filter((j) => j.status === "opravljeno" && !j.ocene?.N && !(prefs.neOcenim || []).includes(j.id)).slice(0, 3);
   view.innerHTML = `
   ${profilKartica(S.mojster, moja.length)}
+  ${zaOceno.map((j) => `<div class="oceni-kartica"><div><b>Delo je opravljeno</b><span>${esc(j.opis || strokaIme(j.stroka))}, ${esc(j.kraj)}. Želiš oceniti stranko? Ni obvezno.</span></div>
+    <div class="row"><button class="btn small" type="button" data-oceni="${j.id}">Oceni stranko</button><button class="btn small ghost" type="button" data-neocenim="${j.id}">Ne, hvala</button></div></div>`).join("")}
   ${moja.length ? `<h2 class="mali">Moji termini</h2><div class="zgodbe" aria-label="Moji termini">${moja.map((j) => `<button type="button" class="zgodba" data-odpri="T:${j.id}"><span class="kr">${j.slika ? `<img src="${esc(j.slika)}" alt="">` : ikona(j.stroka, 30)}</span><small>${esc(opisTermina(j.termin))}</small></button>`).join("")}</div>` : ""}
   <h2 class="mali">Prosta dela</h2>
   <div class="feed">${prosta.length ? prosta.map(postM).join("") : `<div class="empty">${ikona("orodje", 40, 1.5)}<b>Trenutno ni prostih del</b>Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo.</div>`}</div>`;
@@ -451,7 +455,7 @@ function profilKartica(m, terminov) {
   const reg = (m.regije || []).includes("vsa") ? "Vsa Slovenija" : (m.regije || []).map(regijaIme).join(", ");
   return `<section class="profil">
     <div class="pv">${m.slika ? `<img src="${esc(m.slika)}" alt="">` : `<span>${ikona("mojster", 34)}</span>`}
-      <div><b>${esc(m.ime || "Mojster")}</b><span>${esc(m.firma || "")}</span>${m.davcna ? `<small>Davčna ${esc(m.davcna)}</small>` : ""}</div>
+      <div><b>${esc(m.ime || "Mojster")}</b>${ocenaZnak(uid)}<span>${esc(m.firma || "")}</span>${m.davcna ? `<small>Davčna ${esc(m.davcna)}</small>` : ""}</div>
       <button class="uredi" id="edit" type="button">Uredi</button></div>
     <div class="ps">${(m.stroke || []).map((k) => `<span>${ikona(k, 18, 2)}${esc(strokaIme(k))}</span>`).join("")}</div>
     <div class="pr">${ikona("pin", 18, 2)}<span>${esc(reg)}</span></div>
@@ -475,7 +479,7 @@ function postM(j) {
     <div class="pa">${moja ? `<button class="btn small ghost" type="button" data-take="${j.id}">${ikona("kljukica", 18, 2.6)} Javil si se</button>` : `<button class="btn small" type="button" data-take="${j.id}">Javi se</button>`}
       ${j.prosnja ? "" : `<button class="ikb" type="button" data-slike="${j.id}" aria-label="Prosi za več slik">${ikona("kamera", 24)}</button>`}</div>
     ${j.slika ? `<p class="po" data-odpri="M:${j.id}">${esc(j.opis || strokaIme(j.stroka))}</p>` : ""}
-    <div class="meta pm">${esc([j.kdaj, j.budget && j.budget !== "Ne vem" ? j.budget : ""].filter(Boolean).join(" · "))}</div>
+    <div class="meta pm">${esc([j.kdaj, j.budget && j.budget !== "Ne vem" ? j.budget : ""].filter(Boolean).join(" · "))}${ocenaZnak(j.lastnik, " · Stranka")}</div>
   </article>`;
 }
 // Podrobnosti prostega dela.
@@ -484,6 +488,7 @@ function detM(j) {
   return `${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
     <div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>
     <div class="pogoj"><span>Kdaj</span><b>${esc([j.kdaj, ...(j.doma || [])].filter(Boolean).join(", "))}</b></div>
+    ${ocenaZnak(j.lastnik) ? `<div class="pogoj"><span>Stranka</span><b>${ocenaZnak(j.lastnik)}</b></div>` : ""}
     ${j.budget ? `<div class="pogoj"><span>Okvirno plačilo</span><b>${esc(j.budget)}</b></div>` : ""}
     ${j.ponudb ? `<div class="meta">Javili so se že ${mojstrov(j.ponudb).replace("mojstre", "mojstrov")}</div>` : ""}
     ${moja?.status === "caka" ? `<div class="status"><span class="dot"></span>Javil si se za ${esc(opisTermina(moja.termin))}. Čakaš na stranko.</div><button class="btn ghost" type="button" data-take="${j.id}">Spremeni termin ali ceno</button>`
@@ -496,6 +501,7 @@ function detT(j) {
   return `${pic(j)}<div class="body">${tag(j.stroka)}<h3>${esc(j.opis || strokaIme(j.stroka))}</h3>
     <div class="meta">${esc(j.kraj)}</div>
     <div class="status"><span class="dot ok"></span>Tvoj termin: ${esc(opisTermina(j.termin))}</div>
+    ${ocenaZnak(j.lastnik) ? `<div class="pogoj"><span>Stranka</span><b>${ocenaZnak(j.lastnik)}</b></div>` : ""}
     ${k.tel ? `<div class="row"><span class="phone">${esc(k.tel)}</span><a class="btn small" href="tel:${esc(k.tel.replace(/\s/g, ""))}">Pokliči</a></div>` : ""}
     <button class="btn ghost" type="button" data-koledar="${j.id}">${ikona("koledar", 22)} Dodaj v koledar in opomnike</button>
     <div class="row"><button class="link" type="button" data-odpovem="${j.id}">Odpovej termin</button></div></div>`;
@@ -529,7 +535,10 @@ function vezi(root) {
   na("[data-sprejmi]", (b) => odgovori(b, true));
   na("[data-zavrni]", (b) => odgovori(b, false));
   na("[data-vec]", (b) => dodajSlike(b.dataset.vec, [...b.files]));
-  na("[data-done]", (b) => setStatus(b.dataset.done, "opravljeno"));
+  na("[data-done]", async (b) => { await setStatus(b.dataset.done, "opravljeno"); ocenaSheet(b.dataset.done, "M"); });
+  na("[data-oceni]", (b) => ocenaSheet(b.dataset.oceni, prefs.role === "M" ? "N" : "M"));
+  na("[data-neocenim]", (b) => { prefs.neOcenim = [...(prefs.neOcenim || []), b.dataset.neocenim].slice(-50); savePrefs(); renderM(); });
+  na("[data-ocene]", (b) => oceneSheet(b.dataset.ocene));
   na("[data-cancel]", (b) => potrdiSheet("Izbrišem naročilo?", b.dataset.s === "prevzeto" ? "Mojster dobi obvestilo, da naj ne pride. Naročilo izgine." : b.dataset.s === "odprto" ? "Mojstri ga ne bodo več videli. Naročilo izgine." : "Naročilo izgine s seznama.", "Da, izbriši", () => izbrisiDela([b.dataset.cancel])));
   na("[data-pocisti]", () => { const ids = S.myJobs.filter((j) => j.status !== "odprto" && j.status !== "prevzeto").map((j) => j.id); potrdiSheet("Izbrišem vsa prejšnja naročila?", `Izbrisanih bo ${ids.length}.`, "Da, izbriši vse", () => izbrisiDela(ids)); });
   na("[data-zamenjaj]", (b) => potrdiSheet("Zamenjam mojstra?", "Temu mojstru odpoveste termin. Naročilo ostane objavljeno, druge ponudbe se vrnejo in izberete lahko drugega mojstra.", "Da, zamenjaj", () => odpovej(b.dataset.zamenjaj, false)));
@@ -559,6 +568,64 @@ function prosiSheet(id) {
     try { await call("prosiSlike", { id, sporocilo: d.querySelector("#msg").value }); d.remove(); toast("Prošnja je poslana", "Ko stranka doda slike, jih vidiš pri objavi."); }
     catch (e) { b.disabled = false; const t = d.querySelector("#perr"); t.hidden = false; t.textContent = e.message || "Ni uspelo."; }
   };
+}
+/* ---------- ocene ---------- */
+// Povprečje se naloži ob prvi potrebi in ostane v spominu; ob prihodu se zaslon osveži.
+const zvezde = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+function ocenaZnak(kdo, pred = "") {
+  if (!kdo) return "";
+  const p = S.profili[kdo];
+  if (p === undefined) {
+    S.profili[kdo] = null;
+    getDoc(doc(db, "profili", kdo)).then((d) => { S.profili[kdo] = d.data() || {}; if (d.data()?.st) osveziZaslon(); }).catch(() => { S.profili[kdo] = {}; });
+    return "";
+  }
+  if (!p?.st) return "";
+  return `${esc(pred)}<button class="ocena" type="button" data-ocene="${esc(kdo)}">★ ${(p.vsota / p.st).toFixed(1).replace(".", ",")} <small>(${p.st})</small></button>`;
+}
+function osveziZaslon() {
+  if (document.activeElement?.matches("input,select,textarea")) return;
+  if (prefs.role === "N") renderN(); else if (prefs.role === "M" && S.mojster) renderM();
+}
+function ocenaSheet(id, smer) {
+  let n = 0;
+  const d = document.createElement("div"); d.className = "sheet";
+  d.innerHTML = `<div role="dialog" aria-label="Ocena"><h2 style="margin-top:0">${smer === "M" ? "Kako ste zadovoljni z mojstrom?" : "Kako je bilo s stranko?"}</h2>
+    <p class="lead">${smer === "M" ? "Ocena pomaga drugim izbrati dobrega mojstra." : "Neobvezno. Ocena pomaga drugim mojstrom."}</p>
+    <div class="zvezdice" role="radiogroup">${[1, 2, 3, 4, 5].map((i) => `<button type="button" data-z="${i}" aria-label="${i} od 5">★</button>`).join("")}</div>
+    <textarea id="kom" maxlength="200" rows="3" placeholder="${smer === "M" ? "Kaj bi povedali drugim? (neobvezno)" : "Komentar (neobvezno)"}"></textarea>
+    <div class="err" id="oerr" hidden></div>
+    <button class="btn" type="button" id="ok" disabled>Pošlji oceno</button><button class="btn ghost" type="button" id="x">${smer === "M" ? "Kasneje" : "Ne, hvala"}</button></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  d.querySelector("#x").onclick = () => d.remove();
+  d.querySelectorAll("[data-z]").forEach((b) => b.onclick = () => {
+    n = +b.dataset.z;
+    d.querySelectorAll("[data-z]").forEach((x) => x.classList.toggle("da", +x.dataset.z <= n));
+    d.querySelector("#ok").disabled = false;
+  });
+  d.querySelector("#ok").onclick = async () => {
+    const b = d.querySelector("#ok"); b.disabled = true;
+    try {
+      await call("oceni", { id, zvezdice: n, komentar: d.querySelector("#kom").value });
+      d.remove(); toast("Hvala za oceno", "");
+      delete S.profili[smer === "M" ? vsaDela(id)?.mojster : vsaDela(id)?.lastnik];
+    } catch (e) { b.disabled = false; const t = d.querySelector("#oerr"); t.hidden = false; t.textContent = e.message || "Ni uspelo."; }
+  };
+}
+async function oceneSheet(kdo) {
+  const d = document.createElement("div"); d.className = "sheet";
+  const p = S.profili[kdo] || {};
+  d.innerHTML = `<div role="dialog" aria-label="Ocene"><h2 style="margin-top:0">★ ${p.st ? (p.vsota / p.st).toFixed(1).replace(".", ",") : ""} <small class="meta">${p.st || 0} ${p.st === 1 ? "ocena" : p.st === 2 ? "oceni" : p.st === 3 || p.st === 4 ? "ocene" : "ocen"}</small></h2><div id="sez" class="ocene"><div class="spin">Nalagam ...</div></div>
+    <button class="btn ghost" type="button" id="x">Zapri</button></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  d.querySelector("#x").onclick = () => d.remove();
+  try {
+    const snap = await getDocs(query(collection(db, "ocene"), where("za", "==", kdo), limit(100)));
+    const sez = snap.docs.map((x) => x.data()).sort((a, b) => (b.cas?.toMillis() || 0) - (a.cas?.toMillis() || 0));
+    d.querySelector("#sez").innerHTML = sez.map((o) => `<div class="ocena-v"><span class="zv">${zvezde(o.zvezdice)}</span>${o.komentar ? `<p>»${esc(o.komentar)}«</p>` : ""}<small>${esc([o.vloga === "M" ? strokaIme(o.stroka) : "", o.kraj, o.cas ? pred(o.cas.toMillis()) : ""].filter(Boolean).join(" · "))}</small></div>`).join("") || `<p class="lead">Še ni ocen.</p>`;
+  } catch (e) { d.querySelector("#sez").innerHTML = `<p class="lead">Ocen ni bilo mogoče naložiti.</p>`; }
 }
 // Potrditev pred nepovratnim dejanjem (odpoved, preklic).
 function potrdiSheet(naslov, besedilo, gumb, akcija) {
@@ -768,6 +835,7 @@ let feedUnsub = null, feedKey = "";
 function watchMojster() {
   // Račun za potrditveno nakazilo; dokler ni vpisan, potrditev podjetja ni potrebna.
   unsub.push(onSnapshot(doc(db, "nastavitve", "placilo"), (d) => { S.placilo = d.data() || null; if (prefs.role === "M" && !document.activeElement?.matches("input,select,textarea")) renderM(); }, () => {}));
+  unsub.push(onSnapshot(doc(db, "profili", uid), (d) => { S.profili[uid] = d.data() || {}; if (prefs.role === "M" && S.mojster && d.data()?.st) osveziZaslon(); }, () => {}));
   unsub.push(onSnapshot(doc(db, "mojstri", uid), (d) => {
     S.mojster = d.exists() ? d.data() : null;
     const key = aktiven() ? (S.mojster.stroke || []).slice(0, 30).join(",") : "";

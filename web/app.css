@@ -292,3 +292,21 @@ header::after{content:"";position:absolute;left:0;right:0;bottom:4px;height:3px;
 /* Izbris naročila: jasno viden, a miren gumb na dnu podrobnosti */
 .btn.izbrisi{background:#FFF4F2;color:var(--danger);border:1.5px solid #F0C9C4;box-shadow:none;margin-top:18px}
 .stara [data-pocisti]{display:block;margin:10px auto 0}
+/* Ocene */
+.ocena{display:inline-flex;align-items:baseline;gap:4px;background:none;border:0;padding:0;margin:0 0 0 4px;font:inherit;font-weight:700;color:#E07800;cursor:pointer;white-space:nowrap}
+.ocena small{color:var(--muted);font-weight:500}
+.mojster b + .ocena,.pv b + .ocena{margin-left:0;display:flex;font-size:16px}
+.ph small .ocena{font-size:inherit}
+.zvezdice{display:flex;justify-content:center;gap:6px;margin:6px 0 14px}
+.zvezdice button{background:none;border:0;font-size:46px;line-height:1;color:#D5E2DE;padding:4px;cursor:pointer}
+.zvezdice button.da{color:#FF8A00}
+.zv{color:#FF8A00;letter-spacing:2px}
+.vasa{margin-top:10px;font-weight:600}
+.ocene{max-height:55vh;overflow:auto;margin-bottom:10px}
+.ocena-v{border-bottom:1px solid var(--line);padding:12px 0}
+.ocena-v p{margin:6px 0 4px}
+.ocena-v small{color:var(--muted)}
+.oceni-kartica{background:var(--surface);border:1.5px solid #FFD3A1;border-radius:16px;padding:14px;margin:12px 0}
+.oceni-kartica b{display:block}
+.oceni-kartica span{color:var(--muted)}
+.oceni-kartica .row .btn{flex:1}
