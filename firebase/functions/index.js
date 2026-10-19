@@ -5,6 +5,7 @@
 // - narocnina: preveri Applov podpisan nakup (JWS) in mojstru odklene dela.
 // - izbrisi: izbriše uporabnikove podatke (zahteva App Store).
 // - moderacija: Vision pregleda slike pred obvestili, 2 prijavi skrijeta objavo, skrbnik odloča na fixko-app.web.app/moderacija.
+// - statistika: seštevki za zasebno nadzorno ploščo nakupko-8ad19.web.app.
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -692,3 +693,6 @@ exports.izbrisi = onCall(async (req) => {
   await admin.auth().deleteUser(uid).catch(() => {});
   return { ok: true };
 });
+
+// Statistika za nadzorno ploščo Nakupko.
+exports.statistika = require("./statistika").statistika;
