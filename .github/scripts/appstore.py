@@ -103,7 +103,7 @@ if AKCIJA == "vpisi":
             rd = get(f"/appStoreVersions/{v['id']}/appStoreReviewDetail").get("data")
             if rd and rd["attributes"].get("contactPhone"):
                 tel = rd["attributes"]["contactPhone"]; ime = rd["attributes"]; break
-    rev = {"contactFirstName": "Urška", "contactLastName": "Repušič", "contactEmail": "urska.repusic@gmail.com", "contactPhone": tel,
+    rev = {"contactFirstName": "Urška", "contactLastName": "Repušič", "contactEmail": "support@remako.si", "contactPhone": tel,
            "demoAccountRequired": False, "notes": B["opombe"]}
     if tel: rev.update({k: ime[k] for k in ("contactFirstName", "contactLastName", "contactEmail") if ime.get(k)})
     print("KONTAKT", rev["contactFirstName"], rev["contactLastName"], rev["contactEmail"], "tel:", "da" if tel else "NI")

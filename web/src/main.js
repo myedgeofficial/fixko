@@ -152,7 +152,7 @@ function pomocSheet() {
   d.innerHTML = `<div role="dialog" aria-label="Kako deluje"><h2 style="margin-top:0">Kako deluje</h2>
     ${koraki(r)}
     ${r === "N" ? `<p class="lead">Ne veste, kateri mojster? Samo opišite težavo, Popravko izbere sam. Ne veste, kako napisati? Tapnite Povejte in opišite z glasom.</p>` : `<p class="lead">Stranka vidi tvojo sliko, ime, podjetje in davčno številko, zato ti lažje zaupa.</p>`}
-    <p class="lead">Vprašanja: <a class="link" href="mailto:urska.repusic@gmail.com">urska.repusic@gmail.com</a></p>
+    <p class="lead">Vprašanja: <a class="link" href="mailto:support@remako.si">support@remako.si</a></p>
     <button class="btn" type="button" id="x">Razumem</button></div>`;
   document.body.appendChild(d);
   d.onclick = (e) => { if (e.target === d) d.remove(); };
