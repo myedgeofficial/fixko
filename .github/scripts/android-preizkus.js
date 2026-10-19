@@ -30,16 +30,17 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   await slika("02-uvod");
 
   // Stranka
+  const txt = (sel) => p.textContent(sel, { timeout: 3000 }).then((t) => t || "").catch(() => "");
   await p.click('.izbira[data-r="N"]');
   await p.waitForSelector("#opis");
   const geo = setInterval(() => sh("adb emu geo fix 15.6459 46.5547"), 2000);
   await p.waitForFunction(() => !/Iščem/.test(document.getElementById("kraj")?.textContent || ""), null, { timeout: 25000 }).catch(() => {});
   clearInterval(geo);
   await slika("03-stranka");
-  ok("lokacija najde kraj", /Maribor/.test(await p.textContent("#kraj")), (await p.textContent("#kraj")).trim().replace(/\s+/g, " ").slice(0, 60));
-  await p.fill("#opis", "Pušča pipa v kuhinji");
+  ok("lokacija najde kraj", /Maribor/.test(await txt("#kraj")), (await txt("#kraj")).trim().replace(/\s+/g, " ").slice(0, 60));
+  await p.fill("#opis", "Pušča pipa v kuhinji").catch(() => {});
   await pocakaj(500);
-  ok("prepozna stroko", /odovodar/.test(await p.textContent("#stroka")));
+  ok("prepozna stroko", /odovodar/.test(await txt("#stroka")));
   await slika("04-stranka-opis");
 
   // Oglasna pasica (AdMob, preizkusni oglas): naloži se in aplikacija ji naredi prostor na dnu.
