@@ -42,6 +42,12 @@ const spredaj = () => /si\.fixko\.app/.test(sh("adb shell dumpsys window | grep 
   ok("prepozna stroko", /odovodar/.test(await p.textContent("#stroka")));
   await slika("04-stranka-opis");
 
+  // Oglasna pasica (AdMob, preizkusni oglas): naloži se in aplikacija ji naredi prostor na dnu.
+  await p.waitForFunction(() => parseInt(getComputedStyle(document.documentElement).getPropertyValue("--oglas")) > 0, null, { timeout: 30000 }).catch(() => {});
+  const visina = await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--oglas").trim());
+  await slika("04b-oglas");
+  ok("oglasna pasica", parseInt(visina) > 0, visina);
+
   // Pomoč + tipka Nazaj zapre okno
   await p.evaluate(() => document.activeElement?.blur()); sh("adb shell input keyevent 111"); await pocakaj(800);
   await p.click("#pomoc"); await pocakaj(600);
