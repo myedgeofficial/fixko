@@ -4,7 +4,8 @@
 // - prevzemi: stari neposredni prevzem (za starejše gradnje).
 // - narocnina: preveri Applov podpisan nakup (JWS) in mojstru odklene dela.
 // - izbrisi: izbriše uporabnikove podatke (zahteva App Store).
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+// - moderacija: Vision pregleda slike pred obvestili, 2 prijavi skrijeta objavo, skrbnik odloča na fixko-app.web.app/moderacija.
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
@@ -14,6 +15,7 @@ const http2 = require("http2");
 const crypto = require("crypto");
 const { opisTermina, strokaIme, veljavnaDavcna, testnaFirma, sklicIz, jePreverjen } = require("./besedila");
 const banka = require("./banka");
+const mod = require("./moderacija");
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
@@ -82,6 +84,13 @@ function apns(tokens, title, body, data = {}) {
 exports.novoDelo = onDocumentCreated("dela/{id}", async (event) => {
   const delo = event.data?.data();
   if (!delo) return;
+  // Najprej moderacija: blokirani uporabnik ali neprimerna slika → objavo skrijemo, mojstrov ne obvestimo.
+  if ((await db.doc("blokirani/" + delo.lastnik).get()).exists) return skrij(event.data.ref, delo, "blokiran", "Uporabnik je blokiran.");
+  const slabe = await mod.pregledSlik([delo.slika, ...(delo.slike || [])]);
+  if (slabe.length) {
+    await opozori(delo.lastnik);
+    return skrij(event.data.ref, delo, "slika", "Vision: " + slabe.map((x) => x.razlog).join(", "), "Slika ni primerna", "Objava ni bila objavljena, ker slika ni primerna. Fotografirajte samo okvaro ali prostor.");
+  }
   const now = Timestamp.now();
   const snap = await db.collection("mojstri").where("stroke", "array-contains", delo.stroka).get();
   const ujemajo = snap.docs.filter((d) => {
@@ -97,6 +106,115 @@ exports.novoDelo = onDocumentCreated("dela/{id}", async (event) => {
   const slabi = res.filter((r) => r.status === 410 || (r.status === 400 && /BadDeviceToken/.test(r.data))).map((r) => r.token);
   await Promise.all(ujemajo.filter((d) => slabi.includes(d.data().push)).map((d) => d.ref.update({ push: FieldValue.delete() })));
   console.log("novo delo", event.params.id, delo.stroka, delo.regija, "mojstrov", ujemajo.length, "poslano", res.map((r) => r.status).join(","));
+});
+
+/* ---------- moderacija ---------- */
+const PRIJAV_ZA_SKRITJE = 2; // toliko različnih mojstrov mora prijaviti objavo, da se skrije vsem
+const OPOZORIL_ZA_BLOKADO = 2; // po toliko zavrnjenih slikah uporabnik ne more več oddajati del
+const MODERACIJA_URL = "https://fixko-app.web.app/moderacija";
+
+async function obvestiStranko(id, naslov, besedilo) {
+  const k = await db.doc("dela/" + id + "/zasebno/kontakt").get();
+  if (k.exists && k.data().push) await sendApns([k.data().push], naslov, besedilo, { vloga: "N", delo: id }).catch(() => {});
+}
+// Skrije objavo vsem mojstrom (status preklicano), shrani zapis za skrbnika in ga obvesti. Slike ostanejo, dokler skrbnik ne odloči.
+async function skrij(ref, delo, razlog, opis, naslov, besedilo) {
+  await ref.update({ status: "preklicano", moderacija: { razlog, prej: delo.status || "odprto", ob: FieldValue.serverTimestamp() } });
+  await db.doc("moderacija/" + ref.id).set({
+    delo: ref.id, lastnik: delo.lastnik, razlog, opis, stanje: "skrito", ob: FieldValue.serverTimestamp(),
+    stroka: delo.stroka || "", besedilo: delo.opis || "", kraj: delo.kraj || "", slike: [delo.slika, ...(delo.slike || [])].filter(Boolean)
+  }, { merge: true });
+  if (naslov) await obvestiStranko(ref.id, naslov, besedilo + " Pritožba: support@remako.si");
+  await mod.posljiSkrbniku("Popravko: skrita objava (" + razlog + ")", `${opis}\n\n${strokaIme(delo.stroka)}, ${delo.kraj}: ${delo.opis || ""}\n\nOdloči tukaj: ${MODERACIJA_URL}`);
+  console.log("skrito", ref.id, razlog, opis);
+}
+async function opozori(uid) {
+  const n = await db.runTransaction(async (t) => {
+    const ref = db.doc("kazni/" + uid), st = ((await t.get(ref)).data()?.st || 0) + 1;
+    t.set(ref, { st, zadnja: FieldValue.serverTimestamp() }, { merge: true });
+    return st;
+  });
+  if (n >= OPOZORIL_ZA_BLOKADO) await db.doc("blokirani/" + uid).set({ ob: FieldValue.serverTimestamp(), razlog: "neprimerne slike (" + n + "x)" }, { merge: true });
+}
+
+// Dodatne slike (ko mojster prosi zanje): neprimerne odstranimo, ostale ostanejo.
+exports.noveSlike = onDocumentUpdated("dela/{id}", async (event) => {
+  const prej = event.data.before.data()?.slike || [], zdaj = event.data.after.data()?.slike || [];
+  const nove = zdaj.filter((u) => !prej.includes(u));
+  if (!nove.length) return;
+  const slabe = (await mod.pregledSlik(nove)).map((x) => x.url);
+  if (!slabe.length) return;
+  const delo = event.data.after.data();
+  await event.data.after.ref.update({ slike: FieldValue.arrayRemove(...slabe) });
+  await Promise.all(slabe.map((u) => admin.storage().bucket().file(mod.potIz(u)).delete().catch(() => {})));
+  await opozori(delo.lastnik);
+  await obvestiStranko(event.params.id, "Slika ni primerna", "Neprimerno sliko smo odstranili. Fotografirajte samo okvaro ali prostor.");
+  await mod.posljiSkrbniku("Popravko: odstranjena dodatna slika", `Delo ${event.params.id} (${strokaIme(delo.stroka)}, ${delo.kraj}), uporabnik ${delo.lastnik}. Slike so izbrisane.`);
+});
+
+// Prijava objave ali mojstra: skrbnika obvestimo; ko objavo prijavita 2 različna mojstra, jo skrijemo vsem.
+exports.novaPrijava = onDocumentCreated("prijave/{id}", async (event) => {
+  const p = event.data?.data();
+  if (!p) return;
+  const dRef = db.doc("dela/" + p.delo), d = await dRef.get();
+  const delo = d.exists ? d.data() : null;
+  const kje = delo ? `${strokaIme(delo.stroka)}, ${delo.kraj}: ${delo.opis || ""}` : "delo ne obstaja več";
+  if (p.kdo === "objava" && delo && delo.status === "odprto") {
+    const vse = await db.collection("prijave").where("delo", "==", p.delo).where("kdo", "==", "objava").get();
+    // Štejejo samo prijave različnih mojstrov (ena naprava ne more sama skriti tuje objave).
+    const kandidati = [...new Set(vse.docs.map((x) => x.data().prijavil))];
+    const prijavili = new Set((await Promise.all(kandidati.map((u) => db.doc("mojstri/" + u).get()))).filter((x) => x.exists).map((x) => x.id));
+    if (prijavili.size >= PRIJAV_ZA_SKRITJE) {
+      const razlogi = [...new Set(vse.docs.map((x) => x.data().razlog))].join(", ");
+      return skrij(dRef, delo, "prijave", prijavili.size + " prijave: " + razlogi, "Objava je skrita", "Mojstri so objavo prijavili kot neprimerno, zato je skrita.");
+    }
+  }
+  await mod.posljiSkrbniku("Popravko: nova prijava (" + (p.kdo === "mojster" ? "mojster" : "objava") + ")", `Razlog: ${p.razlog}\nDelo: ${kje}\n\nPregled: ${MODERACIJA_URL}`);
+});
+
+// Skrbnik: seznam skritih objav in prijav; obnovi, odstrani (izbriše slike), blokiraj/odblokiraj uporabnika.
+exports.moderacija = onCall(async (req) => {
+  if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  await skrbnik(req.data?.koda);
+  const akcija = req.data?.akcija, id = String(req.data?.id || "");
+  const ms = (t) => t?.toMillis?.() || 0;
+  if (akcija === "seznam") {
+    const [sk, pr, bl] = await Promise.all([
+      db.collection("moderacija").orderBy("ob", "desc").limit(60).get(),
+      db.collection("prijave").orderBy("ustvarjeno", "desc").limit(40).get(),
+      db.collection("blokirani").limit(100).get()
+    ]);
+    return {
+      skrite: sk.docs.map((x) => ({ ...x.data(), ob: ms(x.data().ob) })),
+      prijave: pr.docs.map((x) => ({ delo: x.data().delo, kdo: x.data().kdo, razlog: x.data().razlog, ob: ms(x.data().ustvarjeno) })),
+      blokirani: bl.docs.map((x) => ({ uid: x.id, razlog: x.data().razlog || "", ob: ms(x.data().ob) }))
+    };
+  }
+  if (akcija === "blokiraj" || akcija === "odblokiraj") {
+    const uid = String(req.data?.uid || "");
+    if (!uid) throw new HttpsError("invalid-argument", "Ni uporabnika.");
+    if (akcija === "odblokiraj") { await Promise.all([db.doc("blokirani/" + uid).delete(), db.doc("kazni/" + uid).delete()]); return { ok: true }; }
+    await db.doc("blokirani/" + uid).set({ ob: FieldValue.serverTimestamp(), razlog: "skrbnik" });
+    const odprta = await db.collection("dela").where("lastnik", "==", uid).get();
+    for (const d of odprta.docs) if (d.data().status === "odprto") await skrij(d.ref, d.data(), "blokiran", "Skrbnik je blokiral uporabnika.");
+    return { ok: true };
+  }
+  const mRef = db.doc("moderacija/" + id), m = await mRef.get();
+  if (!m.exists) throw new HttpsError("not-found", "Zapisa ni.");
+  if (akcija === "obnovi") {
+    const dRef = db.doc("dela/" + id), d = await dRef.get();
+    if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
+    if (d.data().status === "preklicano" && d.data().moderacija) await dRef.update({ status: d.data().moderacija.prej || "odprto", moderacija: FieldValue.delete() });
+    await mRef.update({ stanje: "obnovljeno" });
+    return { ok: true };
+  }
+  if (akcija === "odstrani") {
+    await admin.storage().bucket().deleteFiles({ prefix: "slike/" + m.data().lastnik + "/" + id }).catch((e) => console.warn("slike", e.message));
+    await db.doc("dela/" + id).update({ slika: "", slike: [] }).catch(() => {});
+    await mRef.update({ stanje: "odstranjeno", slike: [] });
+    return { ok: true };
+  }
+  throw new HttpsError("invalid-argument", "Neznano dejanje.");
 });
 
 /* ---------- prevzem dela ---------- */

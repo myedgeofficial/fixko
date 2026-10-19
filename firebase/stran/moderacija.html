@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Popravko: moderacija</title>
+  <link rel="stylesheet" href="app.css">
+  <style>
+    .kos{border:1px solid rgba(0,0,0,.1);border-radius:14px;padding:14px;margin:12px 0}
+    .slike{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+    .slike img{width:96px;height:96px;object-fit:cover;border-radius:10px;filter:blur(14px);cursor:pointer}
+    .slike img.vidna{filter:none}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    small{opacity:.7}
+    input{width:100%;padding:12px;font-size:16px;border-radius:10px;border:1px solid #ccc;box-sizing:border-box;margin-bottom:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Moderacija</h1>
+    <div id="vsebina"><div class="spin">Nalagam ...</div></div>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+  <script>
+    // Skrite objave (Vision ali prijave), prijave in blokirani. Dostop s kodo skrbnika (ista kot v aplikaciji).
+    firebase.initializeApp({ apiKey: "AIzaSyCi-g2V67UMyELMjG7fl0BxcqCuUaWRkx4", authDomain: "fixko-app.firebaseapp.com", projectId: "fixko-app", appId: "1:117276939392:web:9728005ec9450ac8c50265" });
+    const klic = firebase.app().functions("europe-west1").httpsCallable("moderacija");
+    const el = document.getElementById("vsebina");
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const kdaj = (ms) => ms ? new Date(ms).toLocaleString("sl-SI", { dateStyle: "short", timeStyle: "short" }) : "";
+    const RAZLOG = { slika: "Neprimerna slika (samodejno)", prijave: "Prijave mojstrov", blokiran: "Blokiran uporabnik" };
+    const STANJE = { skrito: "Čaka na odločitev", obnovljeno: "Obnovljeno", odstranjeno: "Odstranjeno" };
+    let koda = "";
+    try { koda = localStorage.getItem("skrbnik") || ""; } catch (e) {}
+
+    function prijava(napaka) {
+      el.innerHTML = `<input id="koda" type="password" placeholder="Koda skrbnika" autocomplete="off">${napaka ? `<div class="err">${esc(napaka)}</div>` : ""}<button class="btn" id="ok">Naprej</button>`;
+      document.getElementById("ok").onclick = () => { koda = document.getElementById("koda").value.trim(); try { localStorage.setItem("skrbnik", koda); } catch (e) {} nalozi(); };
+    }
+    async function nalozi() {
+      if (!koda) return prijava();
+      el.innerHTML = `<div class="spin">Nalagam ...</div>`;
+      let r;
+      try { r = (await klic({ koda, akcija: "seznam" })).data; } catch (e) { koda = ""; try { localStorage.removeItem("skrbnik"); } catch (x) {} return prijava(e.message); }
+      const bl = new Set(r.blokirani.map((b) => b.uid));
+      el.innerHTML = `<p class="lead">Slike so zamegljene, tapni za ogled. »Obnovi« objavo vrne mojstrom, »Odstrani« izbriše slike.</p>
+        <h2>Skrite objave</h2>${r.skrite.length ? r.skrite.map((m) => `<div class="kos">
+          <b>${esc(RAZLOG[m.razlog] || m.razlog)}</b> · <small>${esc(STANJE[m.stanje] || m.stanje)} · ${kdaj(m.ob)}</small>
+          <div>${esc(m.kraj)}: ${esc(m.besedilo)}</div><small>${esc(m.opis)}</small>
+          <div class="slike">${(m.slike || []).map((u) => `<img src="${esc(u)}" alt="">`).join("")}</div>
+          <div class="row">${m.stanje === "skrito" ? `<button class="btn small" data-a="obnovi" data-id="${esc(m.delo)}">Obnovi</button><button class="btn small ghost" data-a="odstrani" data-id="${esc(m.delo)}">Odstrani</button>` : ""}
+          ${bl.has(m.lastnik) ? `<button class="btn small ghost" data-a="odblokiraj" data-uid="${esc(m.lastnik)}">Odblokiraj uporabnika</button>` : `<button class="btn small danger" data-a="blokiraj" data-uid="${esc(m.lastnik)}">Blokiraj uporabnika</button>`}</div></div>`).join("")
+          : `<div class="empty"><b>Ni skritih objav</b></div>`}
+        <h2>Zadnje prijave</h2>${r.prijave.length ? r.prijave.map((p) => `<div class="kos"><b>${p.kdo === "mojster" ? "Mojster" : "Objava"}</b>: ${esc(p.razlog)} <small>· ${kdaj(p.ob)} · delo ${esc(p.delo)}</small></div>`).join("") : `<div class="empty"><b>Ni prijav</b></div>`}
+        <h2>Blokirani</h2>${r.blokirani.length ? r.blokirani.map((b) => `<div class="kos">${esc(b.razlog)} <small>· ${kdaj(b.ob)} · ${esc(b.uid)}</small><div class="row"><button class="btn small ghost" data-a="odblokiraj" data-uid="${esc(b.uid)}">Odblokiraj</button></div></div>`).join("") : `<div class="empty"><b>Nihče ni blokiran</b></div>`}`;
+      el.querySelectorAll(".slike img").forEach((i) => i.onclick = () => i.classList.toggle("vidna"));
+      el.querySelectorAll("[data-a]").forEach((b) => b.onclick = async () => {
+        b.disabled = true;
+        try { await klic({ koda, akcija: b.dataset.a, id: b.dataset.id, uid: b.dataset.uid }); } catch (e) { alert(e.message); }
+        nalozi();
+      });
+    }
+    firebase.auth().signInAnonymously().then(nalozi).catch((e) => { el.innerHTML = `<div class="err">${esc(e.message)}</div>`; });
+  </script>
+</body>
+</html>
