@@ -160,7 +160,9 @@ if AKCIJA == "slike":
             print("SLIKA", x["attributes"]["fileName"], json.dumps(x["attributes"].get("assetDeliveryState")))
 
 if AKCIJA == "oddaj":
-    sub = json_poslji("POST", "/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": "IOS"}, "relationships": {"app": {"data": {"type": "apps", "id": AID}}}}})
+    # odprto (prazno) oddajo iz prejšnjega poskusa uporabimo znova
+    odprte = [x for x in get(f"/apps/{AID}/reviewSubmissions", **{"filter[platform]": "IOS"})["data"] if x["attributes"].get("state") == "READY_FOR_REVIEW"]
+    sub = {"data": odprte[0]} if odprte else json_poslji("POST", "/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": "IOS"}, "relationships": {"app": {"data": {"type": "apps", "id": AID}}}}})
     if sub:
         sid = sub["data"]["id"]
         poslji("POST", "/reviewSubmissionItems", {"type": "reviewSubmissionItems", "relationships": {"reviewSubmission": {"data": {"type": "reviewSubmissions", "id": sid}}, "appStoreVersion": {"data": {"type": "appStoreVersions", "id": ver["id"]}}}})
