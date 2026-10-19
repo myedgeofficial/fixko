@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { zacniSnemanje } from "./glas.js";
+import { zacniOglase, pasicaOglasa, imaNastavitveOglasov, nastavitveOglasov } from "./oglasi.js";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { Preferences } from "@capacitor/preferences";
 import { Geolocation } from "@capacitor/geolocation";
@@ -104,16 +105,14 @@ document.getElementById("tabM").onclick = () => setRole("M");
 document.getElementById("nast").onclick = () => settingsSheet();
 document.getElementById("pomoc").onclick = () => pomocSheet();
 function setRole(r) { document.getElementById("det")?.remove(); prefs.role = r; prefs.uvod = true; savePrefs(); render(); window.scrollTo(0, 0); }
-const OGLASI = false;
 function render() {
   const uvod = !prefs.uvod;
   document.querySelector(".switch").hidden = uvod;
-  if (uvod) { document.getElementById("oglas").hidden = true; document.body.classList.remove("z-oglasom"); if (!view.querySelector(".izbira")) renderUvod(); return; }
+  // Oglasna pasica (AdMob) na dnu, a ne na uvodnem zaslonu.
+  pasicaOglasa(!uvod);
+  if (uvod) { if (!view.querySelector(".izbira")) renderUvod(); return; }
   document.getElementById("tabN").setAttribute("aria-pressed", prefs.role === "N");
   document.getElementById("tabM").setAttribute("aria-pressed", prefs.role === "M");
-  // Oglasna pasica: prazen prostor bi Apple zavrnil, zato je skrita, dokler ni pravega oglasa (AdMob).
-  document.getElementById("oglas").hidden = !OGLASI;
-  document.body.classList.toggle("z-oglasom", OGLASI);
   prefs.role === "N" ? renderN() : renderM();
 }
 
@@ -918,6 +917,7 @@ function settingsSheet() {
     ${S.mojster && ios && !BREZPLACNO ? `<button class="btn ghost" type="button" id="man">Upravljaj naročnino</button>` : ""}
     <button class="btn ghost" type="button" id="obv">Vklopi obvestila</button>
     <a class="btn ghost" href="zasebnost.html">Zasebnost in pogoji</a>
+    ${imaNastavitveOglasov() ? `<button class="btn ghost" type="button" id="ogl">Nastavitve oglasov</button>` : ""}
     <button class="btn danger" type="button" id="del">Izbriši moje podatke</button>
     <div id="potrdi" hidden><p>Izbrišemo tvoj profil, tvoja dela in slike. Naročnino v App Store prekličeš posebej. Tega ni mogoče razveljaviti.</p><button class="btn danger" type="button" id="del2">Da, izbriši vse</button></div>
     <button class="btn" type="button" id="x">Zapri</button>
@@ -928,6 +928,7 @@ function settingsSheet() {
   d.querySelector("#skrb").onclick = () => { d.remove(); skrbnikSheet(); };
   d.querySelector("#prof")?.addEventListener("click", () => { d.remove(); S.urejam = true; setRole("M"); });
   d.querySelector("#man")?.addEventListener("click", () => FixkoPay.manage().catch(() => {}));
+  d.querySelector("#ogl")?.addEventListener("click", () => { d.remove(); nastavitveOglasov(); });
   d.querySelector("#obv").onclick = async () => {
     const t = await enablePush();
     if (!t) return toast("Obvestila so izklopljena", android && !window.FIXKO_PUSH ? "Na Androidu bodo obvestila na voljo v naslednji verziji." : "Vklopi jih v nastavitvah telefona: Popravko > Obvestila.");
@@ -1049,6 +1050,7 @@ function shrink(file, max = 1280) {
 /* ---------- zagon ---------- */
 (async function start() {
   await loadPrefs();
+  zacniOglase();
   // Lokacija ob vsaki uporabi (če je dovoljena in kraja niste vpisali sami).
   if (!prefs.krajRocno) najdiLokacijo(false);
   if (!cfg) { render(); return; }

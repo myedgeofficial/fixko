@@ -8,6 +8,7 @@
     "sync": "node scripts/build-www.js && npx cap sync ios"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.2.1",
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/geolocation": "^8.2.3",
