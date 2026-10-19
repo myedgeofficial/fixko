@@ -6,9 +6,9 @@ import { AdMob, BannerAdSize, BannerAdPosition, BannerAdPluginEvents, Interstiti
 const android = Capacitor.getPlatform() === "android";
 export const oglasiVklopljeni = android;
 
-// ID-ji oglasnih enot (REMAKO AdMob); brez njih Googlovi preizkusni oglasi.
-const PASICA = window.POPRAVKO_PASICA || "ca-app-pub-3940256099942544/6300978111";
-const CEZ_ZASLON = window.POPRAVKO_CEZ_ZASLON || "ca-app-pub-3940256099942544/1033173712";
+// ID-ji oglasnih enot (REMAKO AdMob).
+const PASICA = window.POPRAVKO_PASICA || "ca-app-pub-2170388618811750/6926831924";
+const CEZ_ZASLON = window.POPRAVKO_CEZ_ZASLON || "ca-app-pub-2170388618811750/1670635819";
 
 // Odprtje = zagon ali vrnitev v aplikacijo po 3+ minutah. Prvi dan po namestitvi oglasa čez cel zaslon ni.
 const KLJUC = "popravko-odprtja", ODSOTNOST = 3 * 60 * 1000, VSAKO = 3, PO_ODPRTJU = 4000, PRVI_DAN = 24 * 3600 * 1000;
