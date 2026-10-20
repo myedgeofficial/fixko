@@ -1,6 +1,6 @@
 // Moderacija slik in objav:
 // - pregledSlik: Google Cloud Vision (SafeSearch, strežnik v EU) oceni slike del; gole, nasilne in krvave zavrnemo.
-// - posljiSkrbniku: e-pošta skrbniku (support@remako.si), če sta nastavljena MAIL_USER in MAIL_PASS (Gmail z geslom za aplikacije).
+// - posljiSkrbniku: e-pošta skrbniku (support@remako.si) prek Gmaila; geslo za aplikacije je v Secret Manager (MAIL_PASS).
 const STOPNJE = { UNKNOWN: 0, VERY_UNLIKELY: 1, UNLIKELY: 2, POSSIBLE: 3, LIKELY: 4, VERY_LIKELY: 5 };
 // Pragovi: gola telesa že pri LIKELY, izzivalno (racy) in nasilje šele pri VERY_LIKELY, da ne zavrnemo kopalnic in polomljenih stvari.
 const PRAGOVI = { adult: 4, racy: 5, violence: 5, medical: 5 };
@@ -40,12 +40,14 @@ async function pregledSlik(urls) {
 }
 
 async function posljiSkrbniku(zadeva, besedilo) {
-  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) { console.log("skrbnik (e-pošta ni nastavljena):", zadeva); return; }
+  const user = process.env.MAIL_USER || "repusicurska@gmail.com", pass = (process.env.MAIL_PASS || "").replace(/\s/g, "");
+  if (!pass) { console.log("skrbnik (e-pošta ni nastavljena):", zadeva); return false; }
   try {
     const nodemailer = require("nodemailer");
-    const t = nodemailer.createTransport({ service: "gmail", auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS } });
-    await t.sendMail({ from: `Popravko <${process.env.MAIL_USER}>`, to: process.env.MAIL_TO || "support@remako.si", subject: zadeva, text: besedilo });
-  } catch (e) { console.error("e-pošta", e.message); }
+    const t = nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
+    await t.sendMail({ from: `Popravko <${user}>`, to: process.env.MAIL_TO || "support@remako.si", subject: zadeva, text: besedilo });
+    return true;
+  } catch (e) { console.error("e-pošta", e.message); return false; }
 }
 
 module.exports = { neprimerno, gsIz, potIz, pregledSlik, posljiSkrbniku };
