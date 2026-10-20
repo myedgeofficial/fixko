@@ -82,7 +82,7 @@ function apns(tokens, title, body, data = {}) {
 }
 
 /* ---------- novo delo → obvestila mojstrom ---------- */
-exports.novoDelo = onDocumentCreated("dela/{id}", async (event) => {
+exports.novoDelo = onDocumentCreated({ document: "dela/{id}", secrets: ["MAIL_PASS"] }, async (event) => {
   const delo = event.data?.data();
   if (!delo) return;
   // Najprej moderacija: blokirani uporabnik ali neprimerna slika → objavo skrijemo, mojstrov ne obvestimo.
@@ -139,7 +139,7 @@ async function opozori(uid) {
 }
 
 // Dodatne slike (ko mojster prosi zanje): neprimerne odstranimo, ostale ostanejo.
-exports.noveSlike = onDocumentUpdated("dela/{id}", async (event) => {
+exports.noveSlike = onDocumentUpdated({ document: "dela/{id}", secrets: ["MAIL_PASS"] }, async (event) => {
   const prej = event.data.before.data()?.slike || [], zdaj = event.data.after.data()?.slike || [];
   const nove = zdaj.filter((u) => !prej.includes(u));
   if (!nove.length) return;
@@ -154,7 +154,7 @@ exports.noveSlike = onDocumentUpdated("dela/{id}", async (event) => {
 });
 
 // Prijava objave ali mojstra: skrbnika obvestimo; ko objavo prijavita 2 različna mojstra, jo skrijemo vsem.
-exports.novaPrijava = onDocumentCreated("prijave/{id}", async (event) => {
+exports.novaPrijava = onDocumentCreated({ document: "prijave/{id}", secrets: ["MAIL_PASS"] }, async (event) => {
   const p = event.data?.data();
   if (!p) return;
   const dRef = db.doc("dela/" + p.delo), d = await dRef.get();
@@ -174,7 +174,7 @@ exports.novaPrijava = onDocumentCreated("prijave/{id}", async (event) => {
 });
 
 // Skrbnik: seznam skritih objav in prijav; obnovi, odstrani (izbriše slike), blokiraj/odblokiraj uporabnika.
-exports.moderacija = onCall(async (req) => {
+exports.moderacija = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
   if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
   await skrbnik(req.data?.koda);
   const akcija = req.data?.akcija, id = String(req.data?.id || "");
@@ -191,6 +191,7 @@ exports.moderacija = onCall(async (req) => {
       blokirani: bl.docs.map((x) => ({ uid: x.id, razlog: x.data().razlog || "", ob: ms(x.data().ob) }))
     };
   }
+  if (akcija === "testna-posta") return { poslano: await mod.posljiSkrbniku("Popravko: testno sporočilo", "E-pošta za prijave in skrite objave deluje.\n\nPregled: " + MODERACIJA_URL) };
   if (akcija === "blokiraj" || akcija === "odblokiraj") {
     const uid = String(req.data?.uid || "");
     if (!uid) throw new HttpsError("invalid-argument", "Ni uporabnika.");
