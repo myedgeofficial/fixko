@@ -28,7 +28,7 @@ const PRIMERI = {
   ],
   mizarstvo: [
     "okenska polica je gnila", "vrata od omare so padla dol",
-    "vrata se ne zapirajo", "vrata skripajo", "kljuka je odpadla", "okno se ne zapre", "polkna so trohnela",
+    "vrata se ne zapirajo", "vrata skripajo", "kljuka je odpadla", "polkna so trohnela",
     "nova kuhinja po meri mizar", "stopnice skripajo", "predal se zatika", "tisler za omaro po meri", "šarnir na omarici je počil"
   ],
   montaza: [
@@ -68,7 +68,7 @@ const PRIMERI = {
     "zid na vrtu se podira", "zidar za ograjo iz betona", "fasada odpada", "odpada omet", "razpoka v zidu", "predelna stena iz knaufa", "vlaga v zidu"
   ],
   okna: [
-    "vhodna vrata težko zaklenem", "rolete ne delajo", "komarnik za okno", "razbito okno", "okno ne tesni", "zamenjat žaluzije", "zaklenil sem se ven"
+    "vhodna vrata težko zaklenem", "rolete ne delajo", "komarnik za okno", "okno se ne zapre", "ključar", "razbito okno", "okno ne tesni", "zamenjat žaluzije", "zaklenil sem se ven"
   ],
   aparati: [
     "pečica ne greje", "pralni stroj ne ožame", "hladilnik ne hladi", "pomivalni stroj ne črpa vode", "sušilni stroj ne dela", "mikrovalovka ne greje"
