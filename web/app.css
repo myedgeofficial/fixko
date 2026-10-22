@@ -148,6 +148,10 @@ h2.prvi{margin-top:4px}
 #kraj .najdeno{margin-top:14px}
 .neobv{font-weight:400;font-size:15px;color:var(--muted);margin-left:6px}
 #kdaj,#doma,#budget{margin-top:4px}
+.m2{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px;font-size:18px;font-weight:600}
+.m2 small{display:block;color:var(--muted);font-weight:400;font-size:15px}
+.m2v{display:flex;align-items:center;gap:8px}
+.m2v input{width:110px;text-align:right}
 .ponudba{border:1.5px solid var(--accent);border-radius:16px;padding:12px;margin-top:12px;background:var(--surface)}
 .ponudba .mojster{margin-top:0}
 .pogoj{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-top:8px;font-size:17px}
