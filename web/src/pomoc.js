@@ -40,7 +40,7 @@ const BESEDE = {
     kuhinja_po_mer kuhinjo_po_mer omara_po_mer omaro_po_mer po_meri$! pohistvo_po_mer pohistv_po_mer vgradn_omar_po_mer mizarsk! mizarsko! tisljar!! tisljarj!! stolar!!
     srank! sranka$ sranki$ omar_razpad lesen_vrat lesena_vrat vrata_drs vrata_drgn vrata_se_ne_zapr notranj_vrat sobn_vrat lesen_ograj lesena_ogra lesen_teras lesena_teras
     masiv! masivn! iz_lesa iz_les$ iz_masiv hrast_mi postelj_skrip stol_popravi popravit_stol popravil_stol popravit_miz kredenc_razpad leseno_okn leseni_okn obnov_lesen restavrir! restavracij_pohist`,
-  montaza: `pritrd_omar obes_omar pritrd_omaric sestav! sestavit! sestavlj! zloz! zlozit! montaz! montir! montirat! monter!! ike! jysk! lesnina! harvey! mebl! mebel! pohistv! garnitur! sedezn! omaro_sestav sestav_omar
+  montaza: `pritrd_omar obes_omar pritrd_omaric sestav! sestavit! sestavlj! zloz! zlozit! montaz montir montirat monter!! ike! jysk! lesnina! harvey! mebl! mebel! pohistv! garnitur! sedezn! omaro_sestav sestav_omar
     televizor! televizij! tv! tv_na_sten na_steno! obesit! obesi! obesil! obes! pritrdit! pritrd! privijac! privit! sraufat! sraufa! zasraufat! luknjo_zvrtat zvrtat! vrtat! vrtanj!
     zaves! zavese! karnis! garnis! garnisn! polic! police$! slika_na_sten ogledal! kuhinj! kuhinjo_sestav vgradn! nosilec! drzal! obesalnik! kljukic
     sestavit_miz sestaviti_miz zlozit_miz sestav_miz sestavit_postelj sestavit_regal regal! garderob! garderobn_omar montaz_garderob montaz_omar montaz_kuhinj montaza_kuhinj
@@ -98,6 +98,44 @@ const BESEDE = {
     varjenj! varjenje! zvarit! zelezn_ograj zelezn! kovin! kovinsk_ograj kovinsk_vrat popravilo_kovin hisnik_za_blok hisnisk_dela drobna_popravil drobn_popravil manjsa_popravila
     moz_za_vse mozakar! vse_po_hisi montaz_alarm montaza_alarma alarmn! kamer_namest namestit_kamer namestitev_kamer videonadzor! brusit_noz brusenje_noz nozi$ noze$ izdelava_kljuc`
 };
+
+// Dodatne besede in zveze (2026-10-22): pogosti opisi strank, ki so prej šli k napačni stroki ali nikamor.
+const DODATNO = {
+  vodovod: `praln_stroj_na_vod priklop_praln_na_vod priklop_vod podometn_wc podometni! geberit! wc_kotlic wc_skoljk montaz_wc nov_wc$ menjava_wc zamenjav_wc
+    hidrofor! crpalk_za_vod vodn_crpalk vodna_napeljav vodovodna_napeljav napeljav_vod vodovodn! odtok_v_tus odtocni_kanal kanaletk! rinola zamasen_lijak lijak!
+    puscajoc! kapljajoc! zmrzn! pocena_cev pocil_cev voda_tece voda_curi voda_kaplja pritisk_vod filter_vod mehcalec! bide! pisoar! pomivalno_korit pipa_ne_zapr pipa_se_ne_zapr praln_korit montaz_tus montaz_umivaln montaz_korit`,
+  elektrika: `instalacij_za_novo instalacij_v_hisi elektricne_instalacij elektroinstalacij! elektricne_napeljav nova_napeljav stara_napeljav vticnice$! vticnico! vtikac!
+    svetilk! stropn_luc stropna_svetil zunanj_luc senzor_gibanj reflektor! led_svetil razsvetljav! pametn_his pametn_stikal rcd! fi_stikalo varovalke_pad
+    ozemljit! strelovod! soncni_panel soncne_panel fotovoltai! fotovoltaik! inverter! razsmernik! brni_omaric elektricna_omaric`,
+  keramika: `fuge_v_tus fuge_so fug_v_kopaln fugiranj_tus fugir_tus fugirat_tus fuge! fugo! fugam! ploscic_na_tleh talne_ploscic stenske_ploscic ploscicar!! flizar!! flizer!!
+    keramicne! keramicn! polaganje_keramik polaganj_ploscic obnov_kopalnic prenova_kopalnic kopalnico_na_novo nova_kopalnic`,
+  pleskanje: `beljenj! belezen! prebelit! pobelit! farbanj! prefarbat! pofarbat! pleskanj! barvanj! pobarvat! prepleskat! premazat! lakirat! lazur! lazurn!
+    madezi_na_strop lise_na_strop plesen_na_sten crna_plesen stene_umazan`,
+  tla: `vinilne! vinilnih! vinil_plosc laminatn! parketn! brusenj_tal lakiranj_tal polaganj_laminat polaganj_parket polaganj_vinil polagan_tal talne_obloge talna_obloga`,
+  zidar: `rusenj_sten rusit_sten porusit_sten podret_sten prebit_sten preboj! prebiti! odstranit_sten temelj$!! temelji$!! temeljev$!! temelja$!! temeljn! skarp!! skarpa! oporn_zid prezidav!! prezidat! predelav_kopalnic
+    gradnj_garaz gradnja_garaz gradnj_ute zidan_ograj zidana_ograj betonsk_ograj ometavanj!! ometat! fasad! zakljucn_sloj kontaktn_fasad`,
+  mizarstvo: `izdelav_omar izdelava_omar izdelava_kuhinj kuhinja_po_meri omara_po_meri fronte! kuhinjske_front lesen! lesena! leseno! lesenih! pergol! nadstres_iz_les
+    obnov_lesen obnova_lesen restavrir! les_lakir masivn! hrastov! smrekov! bukov! iverk! iverne! oplemeniten`,
+  montaza: `sestav_predaln sestavit_predaln predalnik_sestav montaz_mize montaza_mize sestav_mize sestavit_mize pisaln_miz sestav_postelj sestavit_postelj montaz_omar montaza_omar
+    montaz_kuhinj montaza_kuhinj montaza_omaric obesit_slik obesanj_slik obesanje! ogledal_obes montaz_karnis montaza_karnis garderobn! komoda! komodo! predalnik! regal! regale!`,
+  ogrevanje: `montaz_pec montaza_nove_pec nova_pec zamenjav_pec menjava_pec pec_na_pelet pec_na_drv pec_na_plin pec_za_centraln montaz_kotl nov_kotel zamenjav_kotl montaz_radiator
+    peci$ pecjo$ kotlu$ kurjav! centralno_ogrevanj klimatsk_naprav klimo! klime! toplotne_crpalk toplotno_crpalk kamin! kaminsk_pec dimnik_ne_vlec ne_vlece`,
+  aparati: `zamrzovalnik! zamrzovalnik_zaleden zaleden! led_v_zamrzoval pomivalk_pusc pomivalni_stroj_pusc pralni_stroj_pusc pralni_stroj_ropot hladilnik_brni hladilnik_pusc
+    pralnega_stroja_popravil pomivalk! pomivalka! pomivalko! susiln_stroj susilni! susilnik! mikrovalovk! kuhalna_plosca kuhalne_plosce`,
+  streha: `kaplja_s_podstresj tece_s_podstresj curi_s_podstresj zamaka_na_podstresj s_strehe$ skozi_streh strehe_kaplj stresnik! stresnike! stresnikov! zlebov! zlebe! snegobran! snegolov!
+    stresno_okno strešno_okno kleparsk! obroba_dimnik obrob_dimnik pregled_streh popravil_streh nova_streh`,
+  okna: `montaz_zaluzij montaz_sencil montaz_rolet montaz_markiz zaluzij! zaluzije! zaluzijo! senčil! sencil! sencila! senčila! markiz! notranja_vrata notranjih_vrat nova_vrata nov_vrat montaza_vrat montaz_vrat vgradnj_vrat
+    vhodna_vrata vhodnih_vrat balkonsk_vrat garazna_vrata okna_zamenjat zamenjav_oken montaz_oken roleta! rolete! roleto! zunanje_rolet komarnik! mreze_proti_komarj`,
+  vrt: `kosnj! kosnja! pokosit! kosit_trav trato! trate! zivo_mej ziva_meja rezanje_zive obrezovanj_drev obrezat_drev podiranj_drev posek_drev sajenj! posadit! nasad!
+    urejanj_vrt urejanje_okolic okolica_hise grabljenj_listj listje! plevel! tlakovc! tlakovanj_dvorisc namakaln! robotsk_kosilnic`,
+  ciscenje: `oprat! oprati! sprat! oprat_sedezn oprati_sedezn pranj_garnitur ciscenj_po čiščenj pomivanj_oken pomit_okna umiti_okna generalno! globinsk! pranj_preprog pranj_sedezn ciscenj_sedezn tedensk_ciscenj redno_ciscenj
+    ciscenj_pisarn ciscenje_stopnisc ciscenj_kopaln ciscenje_po_gradnj po_zabav cistilk!! cistilni_servis`,
+  selitve: `prevoz_kavc prevoz_omar prevoz_hladilnik prevoz_pralnega prevoz_stvar selitev_stanovanj selitev_pisarn odvoz_pohistv odvoz_starega odvoz_smeti odvoz_kosovn
+    izpraznit_klet izpraznitev! izpraznit! kosovni! kosovnih! sute! sut$ kombijem prevoz! selitev! odpelj_kuhinj odpelj_omar odpelj_pohistv odpelj_kavc odpelj_sedezn prenes_omar prenest_omar prenes_kavc prenest_kavc prenest_v_klet znest_v_klet prenes_pohistv prepelj_pohistv prevoz_pohistv`,
+  drugo: `varjenj_ograj varit_ograj zvarit_ograj zelezna_ograj montaz_alarm montaza_alarm alarmni_sistem namestit_kamer namestitev_kamer videonadzor!! kamere!
+    hisnik!! hisnika!! drobna_popravil razna_popravil manjsa_popravil popravila_po_his`
+};
+for (const [k, v] of Object.entries(DODATNO)) BESEDE[k] += " " + v;
 
 // Vsaka beseda šteje enkrat (najmočnejše ujemanje), besedne zveze dodatno po 3 točke.
 // Med besedami zveze sta lahko največ dve drugi besedi ("rina je zamašena").
