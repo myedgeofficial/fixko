@@ -47,3 +47,16 @@ test("testna firma sme brez davčne", async () => {
   assert.ok(testnaFirma("Sraufnciger d.o.o."));
   assert.ok(!testnaFirma("Kos inštalacije"));
 });
+
+test("približno m²", async () => {
+  const { m2Iz, imaPovrsino } = await import("../src/data.js");
+  assert.equal(m2Iz("40"), 40);
+  assert.equal(m2Iz(" 12,5 "), 13);
+  assert.equal(m2Iz("Prepleskati dnevno sobo, cca 25 m2"), 25);
+  assert.equal(m2Iz("fasada 120m²"), 120);
+  assert.equal(m2Iz("80 kvadratov ploščic"), 80);
+  assert.equal(m2Iz("pušča pipa 2x"), 0);
+  assert.equal(m2Iz(""), 0);
+  assert.equal(m2Iz("0"), 0);
+  assert.ok(imaPovrsino("pleskanje") && !imaPovrsino("vodovod"));
+});

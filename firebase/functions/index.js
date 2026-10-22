@@ -101,7 +101,7 @@ exports.novoDelo = onDocumentCreated({ document: "dela/{id}", secrets: ["MAIL_PA
   });
   await event.data.ref.update({ obvesceni: ujemajo.length });
   const title = "Novo delo: " + (delo.opis || strokaIme(delo.stroka));
-  const body = [delo.kraj, delo.kdaj, delo.budget && delo.budget !== "Ne vem" ? delo.budget : ""].filter(Boolean).join(" · ");
+  const body = [delo.kraj, delo.kdaj, delo.m2 ? `~${delo.m2} m²` : "", delo.budget && delo.budget !== "Ne vem" ? delo.budget : ""].filter(Boolean).join(" · ");
   const res = await sendApns(ujemajo.map((d) => d.data().push), title, body, { vloga: "M", delo: event.params.id });
   // Neveljavne žetone (aplikacija izbrisana) pobrišemo.
   const slabi = res.filter((r) => r.status === 410 || (r.status === 400 && /BadDeviceToken/.test(r.data))).map((r) => r.token);

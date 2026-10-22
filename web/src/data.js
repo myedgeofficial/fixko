@@ -91,3 +91,14 @@ export function sklicIz(uid) {
   return "SI00 " + String(h % 1e8).padStart(8, "0");
 }
 export const jePreverjen = (m) => !!m && (testnaFirma(m.firma) || (!!m.preverjeno && m.preverjeno.davcna === (m.davcna || "")));
+
+// Dela, kjer je pomembna velikost površine: stranka lahko neobvezno vpiše približno m², da mojster ve, kaj ga čaka.
+export const S_POVRSINO = ["pleskanje", "keramika", "tla", "zidar", "streha", "ciscenje", "vrt"];
+export const imaPovrsino = (k) => S_POVRSINO.includes(k);
+// Približno m² iz besedila (vpis ali opis, npr. »dnevna soba 25 m2«); prazno, če ni smiselne številke.
+export function m2Iz(t) {
+  const s = String(t || "").replace(",", ".");
+  const m = s.match(/(\d+(?:\.\d+)?)\s*(?:m2|m²|kvadrat|kv\.?\s*m)/i) || (/^\s*\d+(?:\.\d+)?\s*$/.test(s) ? [0, s] : null);
+  const n = m ? Math.round(Number(m[1])) : 0;
+  return n >= 1 && n <= 100000 ? n : 0;
+}

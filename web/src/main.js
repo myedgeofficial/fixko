@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { STROKE, REGIJE, KDAJ, BUDGET, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA, BREZPLACNO, sklicIz, jePreverjen } from "./data.js";
+import { STROKE, REGIJE, KDAJ, BUDGET, strokaIme, regijaIme, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, testnaFirma, POGOJI_VERZIJA, BREZPLACNO, sklicIz, jePreverjen, imaPovrsino, m2Iz } from "./data.js";
 import QRCode from "qrcode";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 import { ikona } from "./ikone.js";
@@ -69,7 +69,7 @@ const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
 
 /* ---------- stanje ---------- */
 const S = { ponudbe: [], moje: {}, myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true, profili: {} };
-let draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "" };
+let draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "", m2: "" };
 const unsub = [];
 
 /* ---------- obvestila ---------- */
@@ -210,10 +210,15 @@ function renderN() {
     <button class="btn ghost glas" type="button" id="glas">${ikona("mikrofon", 22)} Povejte z glasom</button>${naprej()}${aktivna.length ? "" : prejsnja}`;
   else if (k === 2) { if (!draft.cat) draft.izberi = true; html = `<h1>Kdo in kam?</h1><div id="stroka"></div><div id="kraj"></div>${naprej()}`; }
   else if (k === 3) html = `<h1>Kdaj naj pride mojster?</h1>${chipi("kdaj", KDAJ, draft.kdaj)}`;
-  else if (k === 4) html = `<h1>Koliko približno želite plačati?</h1><p class="lead">Samo okvirno, da se mojster lažje odloči. Točno ceno se dogovorite z njim.</p>${chipi("budget", BUDGET, draft.budget)}`;
+  else if (k === 4) {
+    // Pri pleskanju, ploščicah, tleh ... neobvezno še približna površina (predlog iz opisa, če jo je stranka že napisala).
+    if (imaPovrsino(draft.cat) && !draft.m2 && m2Iz(draft.opis)) draft.m2 = String(m2Iz(draft.opis));
+    const povrsina = imaPovrsino(draft.cat) ? `<label class="m2" for="m2"><span>Približno koliko m²? <small>neobvezno</small></span><span class="m2v"><input id="m2" type="text" inputmode="decimal" maxlength="6" placeholder="npr. 25" value="${esc(draft.m2)}"><b>m²</b></span></label>` : "";
+    html = `<h1>Koliko približno želite plačati?</h1><p class="lead">Samo okvirno, da se mojster lažje odloči. Točno ceno se dogovorite z njim.</p>${povrsina}${chipi("budget", BUDGET, draft.budget)}`;
+  }
   else html = `<h1>Kam naj vas mojster pokliče?</h1>
     <input id="tel" type="tel" inputmode="tel" maxlength="20" placeholder="041 123 456" value="${esc(prefs.tel)}" autocomplete="tel" aria-label="Vaša telefonska številka">
-    <div class="povzetek">${draft.photo ? `<img src="${draft.photo}" alt="">` : `<span>${ikona(draft.cat, 30)}</span>`}<div><b>${esc(draft.opis || strokaIme(draft.cat))}</b><small>${esc([kdo(draft.cat), prefs.kraj, draft.kdaj, draft.budget && draft.budget !== "Ne vem" ? draft.budget : ""].filter(Boolean).join(" · "))}</small></div></div>
+    <div class="povzetek">${draft.photo ? `<img src="${draft.photo}" alt="">` : `<span>${ikona(draft.cat, 30)}</span>`}<div><b>${esc(draft.opis || strokaIme(draft.cat))}</b><small>${esc([kdo(draft.cat), prefs.kraj, draft.kdaj, kvadratura(), draft.budget && draft.budget !== "Ne vem" ? draft.budget : ""].filter(Boolean).join(" · "))}</small></div></div>
     ${naprej("Pošlji mojstrom")}
     <p class="note">Za vas je Popravko brezplačen. S pošiljanjem sprejemate <a class="link" href="pogoji.html">pogoje uporabe</a> in <a class="link" href="zasebnost.html">politiko zasebnosti</a>.</p>`;
   view.innerHTML = vrh + html;
@@ -272,6 +277,7 @@ function renderN() {
       pojdi(3);
     };
   }
+  if (k === 4) document.getElementById("m2")?.addEventListener("input", (e) => { draft.m2 = e.target.value; });
   if (k === 5) {
     const tel = document.getElementById("tel");
     tel.oninput = () => { prefs.tel = tel.value; };
@@ -279,6 +285,8 @@ function renderN() {
   }
   osveziDet();
 }
+// »~25 m²« za povzetek, kadar je stranka vpisala površino.
+const kvadratura = (m2 = imaPovrsino(draft.cat) && m2Iz(draft.m2)) => m2 ? `~${m2} m²` : "";
 async function poslji(err) {
   savePrefs();
   if (!veljavenTel(prefs.tel)) return err("Vpišite telefonsko številko, npr. 041 123 456.");
@@ -296,14 +304,15 @@ async function poslji(err) {
     await setDoc(doc(db, "dela", id, "zasebno", "kontakt"), { lastnik: uid, tel: prefs.tel.trim(), push: push || null });
     await setDoc(doc(db, "dela", id), {
       lastnik: uid, stroka: draft.cat, opis: draft.opis.trim().slice(0, 200), regija: prefs.regija, kraj: prefs.kraj.trim().slice(0, 80),
-      kdaj: draft.kdaj || KDAJ[0], doma: [], budget: draft.budget || "Ne vem", slika, status: "odprto", ustvarjeno: serverTimestamp()
+      kdaj: draft.kdaj || KDAJ[0], doma: [], budget: draft.budget || "Ne vem", slika, status: "odprto", ustvarjeno: serverTimestamp(),
+      ...(imaPovrsino(draft.cat) && m2Iz(draft.m2) ? { m2: m2Iz(draft.m2) } : {})
     });
     // Učenje: če je stranka stroko izbrala sama, shranimo opis in izbiro (brez osebnih podatkov).
     const predlog = prepoznajStroko(draft.opis);
     if (draft.opis.trim() && predlog !== draft.cat) {
       setDoc(doc(collection(db, "popravki")), { opis: draft.opis.trim().slice(0, 200), predlog, izbrano: draft.cat, ustvarjeno: serverTimestamp() }).catch(() => {});
     }
-    draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "", vprasal: true, korak: 0 };
+    draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "", m2: "", vprasal: true, korak: 0 };
     renderN(); window.scrollTo(0, 0);
     toast("Poslano mojstrom", "Ko se mojster javi, ga tukaj potrdite ali zavrnete.");
   } catch (x) {
@@ -500,7 +509,7 @@ function postM(j) {
     <div class="pa">${moja ? `<button class="btn small ghost" type="button" data-take="${j.id}">${ikona("kljukica", 18, 2.6)} Javil si se</button>` : `<button class="btn small" type="button" data-take="${j.id}">Javi se</button>`}
       ${j.prosnja ? "" : `<button class="ikb" type="button" data-slike="${j.id}" aria-label="Prosi za več slik">${ikona("kamera", 24)}</button>`}</div>
     ${j.slika ? `<p class="po" data-odpri="M:${j.id}">${esc(j.opis || strokaIme(j.stroka))}</p>` : ""}
-    <div class="meta pm">${esc([j.kdaj, j.budget && j.budget !== "Ne vem" ? j.budget : ""].filter(Boolean).join(" · "))}${ocenaZnak(j.lastnik, " · Stranka")}</div>
+    <div class="meta pm">${esc([j.kdaj, j.m2 ? `~${j.m2} m²` : "", j.budget && j.budget !== "Ne vem" ? j.budget : ""].filter(Boolean).join(" · "))}${ocenaZnak(j.lastnik, " · Stranka")}</div>
   </article>`;
 }
 // Podrobnosti prostega dela.
@@ -510,6 +519,7 @@ function detM(j) {
     <div class="meta">${esc(j.kraj)} · ${j.ustvarjeno ? pred(j.ustvarjeno.toMillis()) : "pravkar"}</div>
     <div class="pogoj"><span>Kdaj</span><b>${esc([j.kdaj, ...(j.doma || [])].filter(Boolean).join(", "))}</b></div>
     ${ocenaZnak(j.lastnik) ? `<div class="pogoj"><span>Stranka</span><b>${ocenaZnak(j.lastnik)}</b></div>` : ""}
+    ${j.m2 ? `<div class="pogoj"><span>Površina</span><b>približno ${j.m2} m²</b></div>` : ""}
     ${j.budget ? `<div class="pogoj"><span>Okvirno plačilo</span><b>${esc(j.budget)}</b></div>` : ""}
     ${j.ponudb ? `<div class="meta">Javili so se že ${mojstrov(j.ponudb).replace("mojstre", "mojstrov")}</div>` : ""}
     ${moja?.status === "caka" ? `<div class="status"><span class="dot"></span>Javil si se za ${esc(opisTermina(moja.termin))}. Čakaš na stranko.</div><button class="btn ghost" type="button" data-take="${j.id}">Spremeni termin ali ceno</button>`

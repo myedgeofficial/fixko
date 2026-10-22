@@ -35,7 +35,8 @@ service cloud.firestore {
         || (resource.data.status == 'odprto' && aktiven()));
       allow create: if prijavljen()
         && !exists(/databases/$(database)/documents/blokirani/$(request.auth.uid))
-        && request.resource.data.keys().hasOnly(['lastnik', 'stroka', 'opis', 'regija', 'kraj', 'kdaj', 'doma', 'budget', 'slika', 'status', 'ustvarjeno'])
+        && request.resource.data.keys().hasOnly(['lastnik', 'stroka', 'opis', 'regija', 'kraj', 'kdaj', 'doma', 'budget', 'm2', 'slika', 'status', 'ustvarjeno'])
+        && (!('m2' in request.resource.data) || (request.resource.data.m2 is int && request.resource.data.m2 >= 1 && request.resource.data.m2 <= 100000))
         && (!('doma' in request.resource.data) || (request.resource.data.doma is list && request.resource.data.doma.size() <= 4))
         && (!('budget' in request.resource.data) || besedilo(request.resource.data.budget, 20))
         && request.resource.data.lastnik == request.auth.uid
