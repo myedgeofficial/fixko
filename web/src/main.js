@@ -207,6 +207,7 @@ function renderN() {
     <input id="file" type="file" accept="image/*" hidden>
     <label for="opis" class="big">Na kratko opišite</label>
     <textarea id="opis" rows="2" maxlength="200" placeholder="npr. Pušča pipa v kuhinji">${esc(draft.opis)}</textarea>
+    <p class="note" id="zaznano" aria-live="polite"></p>
     <button class="btn ghost glas" type="button" id="glas">${ikona("mikrofon", 22)} Povejte z glasom</button>${naprej()}${aktivna.length ? "" : prejsnja}`;
   else if (k === 2) { if (!draft.cat) draft.izberi = true; html = `<h1>Kdo in kam?</h1><div id="stroka"></div><div id="kraj"></div>${naprej()}`; }
   else if (k === 3) html = `<h1>Kdaj naj pride mojster?</h1>${chipi("kdaj", KDAJ, draft.kdaj)}`;
@@ -232,7 +233,15 @@ function renderN() {
   }));
   if (k === 1) {
     const opis = document.getElementById("opis");
-    opis.oninput = () => { draft.opis = opis.value; if (!draft.catRocno) draft.cat = prepoznajStroko(draft.opis); };
+    // Stroka se prepozna sproti; ko jo najde, na 2. koraku ne kažemo več izbire (tudi če se je stranka vrnila nazaj).
+    const zaznano = document.getElementById("zaznano");
+    const pokazi = () => { zaznano.textContent = draft.cat ? `Pomagal vam bo: ${kdo(draft.cat)}` : ""; };
+    opis.oninput = () => {
+      draft.opis = opis.value;
+      if (!draft.catRocno) { draft.cat = prepoznajStroko(draft.opis); if (draft.cat) draft.izberi = false; }
+      pokazi();
+    };
+    pokazi();
     // Glas: tap začne snemanje, drugi tap ustavi, besedilo se samo izpiše v polje.
     const gb = document.getElementById("glas");
     let ustavi = null;
