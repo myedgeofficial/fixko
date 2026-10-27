@@ -178,7 +178,7 @@ exports.novaPrijava = onDocumentCreated({ document: "prijave/{id}", secrets: ["M
 // Skrbnik: seznam skritih objav in prijav; obnovi, odstrani (izbriše slike), blokiraj/odblokiraj uporabnika.
 exports.moderacija = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
   if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
-  await skrbnik(req.data?.koda);
+  if (!jeLastnik(req)) await skrbnik(req.data?.koda);
   const akcija = req.data?.akcija, id = String(req.data?.id || "");
   const ms = (t) => t?.toMillis?.() || 0;
   if (akcija === "seznam") {
@@ -671,7 +671,9 @@ Regije: ${(m.regije || []).join(", ") || "-"}
 Pregled: ${PREGLED_URL}`);
 });
 
-// Skrbniški dostop s kodo; v bazi je samo njen SHA-256 (nastavitve/skrbnik.hash).
+// Skrbniški dostop: prijava z e-naslovom lastnikov (povezava v e-pošti) ali koda; v bazi je samo njen SHA-256 (nastavitve/skrbnik.hash).
+const SKRBNIKI = ["teo.simonic7@gmail.com", "urska.repusic@gmail.com", "myedgeofficial@gmail.com"];
+const jeLastnik = (req) => !!req.auth?.token?.email_verified && SKRBNIKI.includes(String(req.auth.token.email || "").toLowerCase());
 async function skrbnik(koda) {
   const h = (await db.doc("nastavitve/skrbnik").get()).data()?.hash;
   const moj = crypto.createHash("sha256").update(String(koda || "")).digest("hex");
@@ -679,7 +681,7 @@ async function skrbnik(koda) {
 }
 exports.skrbnik = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
   if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
-  await skrbnik(req.data?.koda);
+  if (!jeLastnik(req)) await skrbnik(req.data?.koda);
   const akcija = req.data?.akcija;
   if (akcija === "seznam") {
     const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();

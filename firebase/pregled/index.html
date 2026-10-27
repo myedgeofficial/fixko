@@ -48,7 +48,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script>
-    // Vsi mojstri in potrditev podjetja (nakazilo 0,01 €). Dostop s kodo skrbnika (ista kot v aplikaciji in na moderaciji).
+    // Vsi mojstri in potrditev podjetja (nakazilo 0,01 €). Dostop: povezava v e-pošti (samo lastniški naslovi) ali koda skrbnika.
     firebase.initializeApp({ apiKey: "AIzaSyCi-g2V67UMyELMjG7fl0BxcqCuUaWRkx4", authDomain: "fixko-app.firebaseapp.com", projectId: "fixko-app", appId: "1:117276939392:web:9728005ec9450ac8c50265" });
     const klic = firebase.app().functions("europe-west1").httpsCallable("skrbnik");
     const el = document.getElementById("vsebina");
@@ -59,19 +59,44 @@
     let koda = "", podatki = null, filter = "caka", iskanje = "";
     try { koda = localStorage.getItem("skrbnik") || ""; filter = localStorage.getItem("pregled-filter") || "caka"; } catch (e) {}
 
-    function prijava(napaka) {
-      el.innerHTML = `<input id="koda" type="password" placeholder="Koda skrbnika" autocomplete="off">${napaka ? `<div class="err">${esc(napaka)}</div>` : ""}<div><button id="ok">Naprej</button></div>`;
-      const i = document.getElementById("koda");
-      const naprej = () => { koda = i.value.trim(); try { localStorage.setItem("skrbnik", koda); } catch (e) {} nalozi(); };
+    const auth = firebase.auth();
+    function prijava(napaka, sKodo) {
+      el.innerHTML = sKodo
+        ? `<input id="koda" type="password" placeholder="Koda skrbnika" autocomplete="off">${napaka ? `<div class="err">${esc(napaka)}</div>` : ""}<div><button id="ok">Naprej</button></div>`
+        : `<p>Vpiši svoj e-naslov. Poslali ti bomo povezavo za prijavo.</p>
+           <input id="mail" type="email" placeholder="ime@gmail.com" autocomplete="email">${napaka ? `<div class="err">${esc(napaka)}</div>` : ""}
+           <div><button id="ok">Pošlji povezavo</button></div><p><a href="#" id="zkodo" class="siva">Imam kodo skrbnika</a></p>`;
+      const i = el.querySelector("input");
+      const naprej = async () => {
+        if (sKodo) {
+          koda = i.value.trim(); try { localStorage.setItem("skrbnik", koda); } catch (e) {}
+          if (!auth.currentUser) await auth.signInAnonymously();
+          return nalozi();
+        }
+        const mail = i.value.trim().toLowerCase();
+        if (!mail.includes("@")) return prijava("Vpiši e-naslov.");
+        document.getElementById("ok").disabled = true;
+        try {
+          await auth.sendSignInLinkToEmail(mail, { url: location.origin + "/", handleCodeInApp: true });
+          try { localStorage.setItem("pregled-mail", mail); } catch (e) {}
+          el.innerHTML = `<p><b>Povezava je poslana na ${esc(mail)}.</b></p><p class="siva">Odpri e-pošto (poglej tudi v vsiljeno pošto) in klikni povezavo. Prijava velja na tej napravi, dokler se ne odjaviš.</p>`;
+        } catch (e) { prijava(e.message); }
+      };
       document.getElementById("ok").onclick = naprej;
       i.onkeydown = (e) => { if (e.key === "Enter") naprej(); };
+      const z = document.getElementById("zkodo");
+      if (z) z.onclick = (e) => { e.preventDefault(); prijava("", true); };
       i.focus();
     }
+    async function odjava(napaka) {
+      koda = ""; try { localStorage.removeItem("skrbnik"); } catch (x) {}
+      await auth.signOut().catch(() => {});
+      prijava(napaka);
+    }
     async function nalozi() {
-      if (!koda) return prijava();
       try { podatki = (await klic({ koda, akcija: "vsi" })).data; }
       catch (e) {
-        if (e.code === "functions/permission-denied" || /koda/i.test(e.message)) { koda = ""; try { localStorage.removeItem("skrbnik"); } catch (x) {} return prijava(e.message); }
+        if (e.code === "functions/permission-denied" || e.code === "functions/unauthenticated") return odjava(auth.currentUser?.email ? `Naslov ${auth.currentUser.email} nima dostopa.` : e.message);
         el.innerHTML = `<div class="err">${esc(e.message)}</div>`; return;
       }
       izrisi();
@@ -136,7 +161,7 @@
       el.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { filter = b.dataset.f; try { localStorage.setItem("pregled-filter", filter); } catch (e) {} izrisi(); });
       const isci = document.getElementById("isci");
       isci.oninput = () => { iskanje = isci.value; const p = isci.selectionStart; izrisi(); const n = document.getElementById("isci"); n.focus(); n.setSelectionRange(p, p); };
-      document.getElementById("odjava").onclick = () => { koda = ""; try { localStorage.removeItem("skrbnik"); } catch (e) {} prijava(); };
+      document.getElementById("odjava").onclick = () => odjava();
       el.querySelectorAll("[data-a]").forEach((b) => b.onclick = async () => {
         const a = b.dataset.a;
         if (a === "potrdi" && !confirm(`Potrdim podjetje »${b.dataset.ime}«? Mojster dobi obvestilo in se lahko javlja na dela.`)) return;
@@ -149,7 +174,18 @@
         nalozi();
       });
     }
-    firebase.auth().signInAnonymously().then(nalozi).catch((e) => { el.innerHTML = `<div class="err">${esc(e.message)}</div>`; });
+    (async () => {
+      if (auth.isSignInWithEmailLink(location.href)) {
+        let mail = ""; try { mail = localStorage.getItem("pregled-mail") || ""; } catch (e) {}
+        if (!mail) mail = prompt("Potrdi svoj e-naslov") || "";
+        try { await auth.signInWithEmailLink(mail.trim(), location.href); } catch (e) { history.replaceState(null, "", "/"); return prijava(e.message); }
+        history.replaceState(null, "", "/");
+      }
+      const u = await new Promise((ok) => { const s = auth.onAuthStateChanged((x) => { s(); ok(x); }); });
+      if (u && u.email) return nalozi();
+      if (koda) { if (!u) await auth.signInAnonymously(); return nalozi(); }
+      prijava();
+    })().catch((e) => { el.innerHTML = `<div class="err">${esc(e.message)}</div>`; });
   </script>
 </body>
 </html>
