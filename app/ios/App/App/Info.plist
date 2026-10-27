@@ -33,7 +33,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<string>ca-app-pub-2170388618811750~9574930586</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Popravko posname vaš glas, da ga prepiše v opis dela. Posnetka ne shranjujemo.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
