@@ -1,4 +1,5 @@
-"""Priprava oddaje v App Store prek App Store Connect API. AKCIJA: stanje | vpisi | slike | oddaj"""
+"""Priprava oddaje v App Store prek App Store Connect API. AKCIJA: stanje | vpisi | slike | oddaj | drzave
+vpisi: besedila iz appstore/besedila.json za vse jezike (sl Popravko, drugje Fixko). drzave: aplikacija na voljo v vseh državah."""
 import os, re, json, textwrap, time, sys, hashlib, glob
 import jwt, requests
 
@@ -74,13 +75,23 @@ def json_poslji(metoda, pot, telo):
 
 
 B = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/besedila.json")))
-if ver is None and AKCIJA != "stanje":
+if ver is None and AKCIJA not in ("stanje", "drzave"):
     print("::error::Ni verzije v pripravi"); sys.exit(1)
 
 if AKCIJA == "vpisi":
     CENA_OK = requests.get(f"{API}/apps/{AID}/appPriceSchedule/manualPrices", headers=H, timeout=60).json().get("data")
-    for l in get(f"/appInfos/{info['id']}/appInfoLocalizations")["data"]:
-        poslji("PATCH", f"/appInfoLocalizations/{l['id']}", {"type": "appInfoLocalizations", "id": l["id"], "attributes": {"subtitle": B["podnaslov"], "privacyPolicyUrl": B["zasebnost"]}})
+    # Ime in podnaslov po jezikih: obstoječe posodobimo, manjkajoče ustvarimo. Če je ime zasedeno, poskusimo rezervno.
+    obst = {l["attributes"]["locale"]: l for l in get(f"/appInfos/{info['id']}/appInfoLocalizations")["data"]}
+    for loc, L in B["jeziki"].items():
+        for ime in [L["ime"]] + ([L["ime_rezerva"]] if L.get("ime_rezerva") else []):
+            atr = {"name": ime, "subtitle": L["podnaslov"], "privacyPolicyUrl": L["zasebnost"]}
+            r = (requests.patch(f"{API}/appInfoLocalizations/{obst[loc]['id']}", headers=H, timeout=60, json={"data": {"type": "appInfoLocalizations", "id": obst[loc]["id"], "attributes": atr}})
+                 if loc in obst else requests.post(f"{API}/appInfoLocalizations", headers=H, timeout=60, json={"data": {"type": "appInfoLocalizations", "attributes": {"locale": loc, **atr},
+                     "relationships": {"appInfo": {"data": {"type": "appInfos", "id": info["id"]}}}}}))
+            print(f"INFOLOC {loc} {ime}: {r.status_code} {'' if r.ok else ' '.join(r.text.split())[:300]}")
+            if r.ok: break
+        else:
+            napaka = True
     poslji("PATCH", f"/appInfos/{info['id']}", {"type": "appInfos", "id": info["id"], "relationships": {
         "primaryCategory": {"data": {"type": "appCategories", "id": "LIFESTYLE"}},
         "secondaryCategory": {"data": {"type": "appCategories", "id": "UTILITIES"}}}})
@@ -92,9 +103,16 @@ if AKCIJA == "vpisi":
         poslji("PATCH", f"/ageRatingDeclarations/{age['id']}", {"type": "ageRatingDeclarations", "id": age["id"], "attributes": a})
     poslji("PATCH", f"/apps/{AID}", {"type": "apps", "id": AID, "attributes": {"contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"}})
     poslji("PATCH", f"/appStoreVersions/{ver['id']}", {"type": "appStoreVersions", "id": ver["id"], "attributes": {"copyright": B["copyright"], "releaseType": "AFTER_APPROVAL"}})
-    for l in get(f"/appStoreVersions/{ver['id']}/appStoreVersionLocalizations")["data"]:
-        poslji("PATCH", f"/appStoreVersionLocalizations/{l['id']}", {"type": "appStoreVersionLocalizations", "id": l["id"], "attributes": {
-            "description": B["opis"], "keywords": B["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B["podpora"], "promotionalText": B["promo"]}})
+    # Opis, ključne besede, promocija in novosti po jezikih (prva verzija novosti nima).
+    prva = len(verzije) <= 1
+    vl = {l["attributes"]["locale"]: l for l in get(f"/appStoreVersions/{ver['id']}/appStoreVersionLocalizations")["data"]}
+    for loc, L in B["jeziki"].items():
+        atr = {"description": L["opis"], "keywords": L["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B["podpora"], "promotionalText": L["promo"], **({} if prva else {"whatsNew": L["novo"]})}
+        if loc in vl:
+            poslji("PATCH", f"/appStoreVersionLocalizations/{vl[loc]['id']}", {"type": "appStoreVersionLocalizations", "id": vl[loc]["id"], "attributes": atr})
+        else:
+            poslji("POST", "/appStoreVersionLocalizations", {"type": "appStoreVersionLocalizations", "attributes": {"locale": loc, **atr},
+                "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": ver["id"]}}}})
     # kontakt za pregled: isti kot pri Nakupku
     tel = ""
     nk = get("/apps", **{"filter[bundleId]": "si.nakupko.app"})["data"]
@@ -135,6 +153,23 @@ if AKCIJA == "vpisi":
     if bl:
         print("BUILD", bl[0]["attributes"]["version"])
         json_poslji("PATCH", f"/appStoreVersions/{ver['id']}/relationships/build", {"data": {"type": "builds", "id": bl[0]["id"]}})
+
+# Vse države (ročni zagon, šele ko Apple odobri mednarodno verzijo).
+if AKCIJA == "drzave":
+    r = requests.get(f"{API}/apps/{AID}/appAvailabilityV2", headers=H, timeout=60)
+    av = r.json().get("data") if r.ok else None
+    if not av:
+        print("::error::Dostopnost še ni nastavljena"); napaka = True
+    else:
+        url = f"https://api.appstoreconnect.apple.com/v2/appAvailabilities/{av['id']}/territoryAvailabilities?limit=200"
+        vse = []
+        while url:
+            j = requests.get(url, headers=H, timeout=60).json()
+            vse += j.get("data", []); url = j.get("links", {}).get("next")
+        for t in vse:
+            if not t["attributes"].get("available"):
+                poslji("PATCH", f"/territoryAvailabilities/{t['id']}", {"type": "territoryAvailabilities", "id": t["id"], "attributes": {"available": True}})
+        print("DRZAV", len(vse), "vklopljenih na novo", sum(1 for t in vse if not t["attributes"].get("available")))
 
 if AKCIJA == "slike":
     mapa = os.path.join(os.path.dirname(__file__), "../../appstore/slike")

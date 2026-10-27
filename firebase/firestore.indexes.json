@@ -6,6 +6,16 @@
       "fields": [
         { "fieldPath": "stroka", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "drzava", "order": "ASCENDING" },
+        { "fieldPath": "ustvarjeno", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dela",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stroka", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "ustvarjeno", "order": "DESCENDING" }
       ]
     },

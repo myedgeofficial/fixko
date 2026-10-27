@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       akcija:
-        description: "stanje | vpisi | slike | oddaj"
+        description: "stanje | vpisi | slike | oddaj | drzave"
         default: "stanje"
 
 jobs:

@@ -6,7 +6,7 @@ const STROKE = {
   selitve: "Selitve in prevoz", drugo: "Hišnik", tla: "Talne obloge", zidar: "Zidar in fasade",
   okna: "Okna, vrata, senčila", aparati: "Gospodinjski aparati"
 };
-const strokaIme = (k, jezik = "sl") => T(jezik, STROKE[k] || k);
+const strokaIme = (k, jezik) => T(typeof jezik === "string" ? jezik : "sl", STROKE[k] || k);
 
 function deli(ms, tz = "Europe/Ljubljana") {
   const f = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23" });

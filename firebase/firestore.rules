@@ -35,7 +35,8 @@ service cloud.firestore {
         || (resource.data.status == 'odprto' && aktiven()));
       allow create: if prijavljen()
         && !exists(/databases/$(database)/documents/blokirani/$(request.auth.uid))
-        && request.resource.data.keys().hasOnly(['lastnik', 'stroka', 'opis', 'regija', 'kraj', 'kdaj', 'doma', 'budget', 'm2', 'slika', 'status', 'ustvarjeno'])
+        && request.resource.data.keys().hasOnly(['lastnik', 'stroka', 'opis', 'regija', 'kraj', 'kdaj', 'doma', 'budget', 'm2', 'slika', 'status', 'ustvarjeno', 'drzava'])
+        && (!('drzava' in request.resource.data) || request.resource.data.drzava.matches('[A-Z]{2}'))
         && (!('m2' in request.resource.data) || (request.resource.data.m2 is int && request.resource.data.m2 >= 1 && request.resource.data.m2 <= 100000))
         && (!('doma' in request.resource.data) || (request.resource.data.doma is list && request.resource.data.doma.size() <= 4))
         && (!('budget' in request.resource.data) || besedilo(request.resource.data.budget, 20))
@@ -64,7 +65,9 @@ service cloud.firestore {
         allow read: if prijavljen() && (resource.data.lastnik == request.auth.uid
           || get(/databases/$(database)/documents/dela/$(id)).data.get('mojster', null) == request.auth.uid);
         allow create: if prijavljen()
-          && request.resource.data.keys().hasOnly(['lastnik', 'tel', 'push'])
+          && request.resource.data.keys().hasOnly(['lastnik', 'tel', 'push', 'jezik', 'tz'])
+          && (!('jezik' in request.resource.data) || besedilo(request.resource.data.jezik, 5))
+          && (!('tz' in request.resource.data) || besedilo(request.resource.data.tz, 60))
           && request.resource.data.lastnik == request.auth.uid
           && besedilo(request.resource.data.tel, 20)
           && (request.resource.data.push == null || besedilo(request.resource.data.push, 200))
@@ -83,22 +86,24 @@ service cloud.firestore {
     function profil(d) {
       return besedilo(d.ime, 60) && besedilo(d.tel, 20)
         && (!('firma' in d) || besedilo(d.firma, 80))
-        && (!('davcna' in d) || (d.davcna is string && (d.davcna.matches('[1-9][0-9]{7}') || d.davcna == '')))
+        && (!('davcna' in d) || (d.davcna is string && (d.davcna.matches('[1-9][0-9]{7}') || d.davcna == '' || d.davcna.matches('[A-Z]{2}[0-9A-Z]{4,14}'))))
         && (!('slika' in d) || (besedilo(d.slika, 600) && d.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*')))
-        && (!('pogoji' in d) || besedilo(d.pogoji, 20));
+        && (!('pogoji' in d) || besedilo(d.pogoji, 20))
+        && (!('drzava' in d) || (d.drzava is string && d.drzava.matches('[A-Z]{2}')))
+        && (!('jezik' in d) || besedilo(d.jezik, 5)) && (!('tz' in d) || besedilo(d.tz, 60));
     }
     match /mojstri/{uid} {
       allow read: if prijavljen() && request.auth.uid == uid;
       allow create: if prijavljen() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
+        && request.resource.data.keys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno', 'drzava', 'jezik', 'tz'])
         && profil(request.resource.data)
         && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 20
-        && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
+        && request.resource.data.regije is list && request.resource.data.regije.size() <= 60;
       allow update: if prijavljen() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno', 'drzava', 'jezik', 'tz'])
         && profil(request.resource.data)
         && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 20
-        && request.resource.data.regije is list && request.resource.data.regije.size() <= 13;
+        && request.resource.data.regije is list && request.resource.data.regije.size() <= 60;
       allow delete: if false;
     }
 
