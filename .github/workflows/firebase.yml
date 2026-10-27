@@ -60,5 +60,6 @@ jobs:
           $FB hosting:sites:list --json | grep -q '"popravko-pregled"' || $FB hosting:sites:create popravko-pregled || true
           $FB deploy --only firestore,storage,functions,hosting:popravko-pregled --force
           NODE_PATH=functions/node_modules node domena.js "$FIREBASE_PROJECT" popravko-pregled popravko.pregled.nakupko.com
+          NODE_PATH=functions/node_modules node javni.js "$FIREBASE_PROJECT" europe-west1 izbrisi
           NODE_PATH=functions/node_modules node prijava.js "$FIREBASE_PROJECT" popravko.pregled.nakupko.com popravko-pregled.web.app
           rm -f "$RUNNER_TEMP/sa.json" functions/.env
