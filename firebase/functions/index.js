@@ -5,6 +5,7 @@
 // - narocnina: preveri Applov podpisan nakup (JWS) in mojstru odklene dela.
 // - izbrisi: izbriše uporabnikove podatke (zahteva App Store).
 // - moderacija: Vision pregleda slike pred obvestili, 2 prijavi skrijeta objavo, skrbnik odloča na fixko-app.web.app/moderacija.
+// - pregled: zasebna stran vseh mojstrov in potrditev podjetij (popravko.pregled.nakupko.com), e-pošta ob novem mojstru in nakazilu.
 // - statistika: seštevki za zasebno nadzorno ploščo nakupko-8ad19.web.app.
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
@@ -113,6 +114,7 @@ exports.novoDelo = onDocumentCreated({ document: "dela/{id}", secrets: ["MAIL_PA
 const PRIJAV_ZA_SKRITJE = 2; // toliko različnih mojstrov mora prijaviti objavo, da se skrije vsem
 const OPOZORIL_ZA_BLOKADO = 2; // po toliko zavrnjenih slikah uporabnik ne more več oddajati del
 const MODERACIJA_URL = "https://fixko-app.web.app/moderacija";
+const PREGLED_URL = "https://popravko.pregled.nakupko.com";
 
 async function obvestiStranko(id, naslov, besedilo) {
   const k = await db.doc("dela/" + id + "/zasebno/kontakt").get();
@@ -600,13 +602,18 @@ exports.narocnina = onCall(async (req) => {
 /* ---------- potrditev podjetja z nakazilom 0,01 € ---------- */
 // Mojster nakaže 0,01 € s TRR podjetja s sklicem iz aplikacije in tapne »Nakazal sem«.
 // Skrbnik na izpisku preveri, da račun pripada podjetju s to davčno (AJPES), in ga potrdi v aplikaciji.
-exports.nakazal = onCall(async (req) => {
+exports.nakazal = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
   const mRef = db.doc("mojstri/" + uid);
   const m = await mRef.get();
   if (!m.exists || !profilOk(m.data())) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
-  await mRef.update({ preverjanje: { cakam: true, sklic: sklicIz(uid), davcna: m.data().davcna || "", ob: FieldValue.serverTimestamp() } });
+  const md = m.data();
+  await mRef.update({ preverjanje: { cakam: true, sklic: sklicIz(uid), davcna: md.davcna || "", ob: FieldValue.serverTimestamp() } });
+  await mod.posljiSkrbniku("Popravko: mojster pravi, da je nakazal 0,01 €", `${md.ime || ""}, ${md.firma || ""} (davčna ${md.davcna || "-"})
+Sklic: ${sklicIz(uid)}
+
+Pregled: ${PREGLED_URL}`);
   return { sklic: sklicIz(uid) };
 });
 
@@ -629,9 +636,39 @@ exports.bankaSeja = onRequest(async (req, res) => {
     res.status(400).send(stran("Povezava ni uspela", String(e.message).replace(/</g, "")));
   }
 });
-exports.pregledBanke = onSchedule({ schedule: "every 5 minutes", region: "europe-west1", timeoutSeconds: 120 }, async () => {
-  const r = await banka.preglej(potrdiMojstra).catch((e) => ({ napaka: e.message }));
+// Vsako novo nakazilo 0,01 € s sklicem: e-pošta skrbniku.
+const IZID = { potrjen: "samodejno potrjen", "ročno": "ime plačnika se ne ujema, potrdi ročno", "že potrjen": "že potrjen", "ni mojstra": "ni mojstra s tem sklicem" };
+async function preglejInSporoci() {
+  const r = await banka.preglej(potrdiMojstra);
+  for (const x of r.rezultat || []) {
+    await mod.posljiSkrbniku(`Popravko: nakazilo 0,01 € (${IZID[x.izid] || x.izid})`,
+      `Plačnik: ${x.placnik || "-"}
+IBAN: ${x.iban || "-"}
+Sklic: ${x.sklic}
+Podjetje: ${x.firma || "-"} (davčna ${x.davcna || "-"})
+
+Pregled: ${PREGLED_URL}`);
+  }
+  return r;
+}
+exports.pregledBanke = onSchedule({ schedule: "every 5 minutes", region: "europe-west1", timeoutSeconds: 120, secrets: ["MAIL_PASS"] }, async () => {
+  const r = await preglejInSporoci().catch((e) => ({ napaka: e.message }));
   if (r.rezultat?.length || r.napaka) console.log("pregledBanke", JSON.stringify(r));
+});
+
+// Nov mojster (profil ustvarjen v aplikaciji): e-pošta skrbniku.
+exports.novMojster = onDocumentCreated({ document: "mojstri/{uid}", secrets: ["MAIL_PASS"] }, async (event) => {
+  const m = event.data?.data();
+  if (!m) return;
+  await mod.posljiSkrbniku("Popravko: nov mojster " + (m.firma || m.ime || ""),
+    `${m.ime || ""}
+Podjetje: ${m.firma || "-"}
+Davčna: ${m.davcna || "-"}
+Telefon: ${m.tel || "-"}
+Stroke: ${(m.stroke || []).map(strokaIme).join(", ") || "-"}
+Regije: ${(m.regije || []).join(", ") || "-"}
+
+Pregled: ${PREGLED_URL}`);
 });
 
 // Skrbniški dostop s kodo; v bazi je samo njen SHA-256 (nastavitve/skrbnik.hash).
@@ -640,13 +677,32 @@ async function skrbnik(koda) {
   const moj = crypto.createHash("sha256").update(String(koda || "")).digest("hex");
   if (!h || h.length !== moj.length || !crypto.timingSafeEqual(Buffer.from(h), Buffer.from(moj))) throw new HttpsError("permission-denied", "Napačna koda.");
 }
-exports.skrbnik = onCall(async (req) => {
+exports.skrbnik = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
   if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
   await skrbnik(req.data?.koda);
   const akcija = req.data?.akcija;
   if (akcija === "seznam") {
     const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();
     return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0 }; }) };
+  }
+  // Vsi mojstri za stran pregled (popravko.pregled.nakupko.com).
+  if (akcija === "vsi") {
+    const ms = (t) => t?.toMillis?.() || 0;
+    const [q, b] = await Promise.all([db.collection("mojstri").get(), banka.stanje()]);
+    const mojstri = q.docs.map((d) => {
+      const m = d.data(), p = m.preverjanje || {}, v = m.preverjeno;
+      const potrjen = !!v && v.davcna === (m.davcna || "");
+      return {
+        uid: d.id, ime: m.ime || "", firma: m.firma || "", davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "",
+        stroke: (m.stroke || []).map(strokaIme), regije: m.regije || [], ustvarjen: ms(d.createTime), posodobljen: ms(m.posodobljeno),
+        narocninaDo: ms(m.narocninaDo), preizkus: !!m.preizkusPorabljen, transakcija: !!m.transakcija, testni: testnaFirma(m.firma),
+        stanje: potrjen ? "potrjen" : p.cakam ? "caka" : p.zavrnjeno ? "zavrnjen" : "ni",
+        preverjeno: v ? { samodejno: !!v.samodejno, placnik: v.placnik || "", iban: v.iban || "", ob: ms(v.ob), davcna: v.davcna || "" } : null,
+        sklic: p.sklic || sklicIz(d.id), placnik: p.placnik || "", iban: p.iban || "", cakaOd: ms(p.ob),
+        ujema: p.placnik ? banka.ujema(p.placnik, m.firma) : null
+      };
+    }).sort((a, b) => b.ustvarjen - a.ustvarjen);
+    return { mojstri, banka: b };
   }
   if (akcija === "potrdi" || akcija === "zavrni") {
     const mRef = db.doc("mojstri/" + String(req.data?.uid || ""));
@@ -663,7 +719,7 @@ exports.skrbnik = onCall(async (req) => {
     try { return { url: await banka.povezi() }; } catch (e) { throw new HttpsError("failed-precondition", e.message); }
   }
   if (akcija === "banka-preglej") {
-    try { return await banka.preglej(potrdiMojstra); } catch (e) { throw new HttpsError("unavailable", e.message); }
+    try { return await preglejInSporoci(); } catch (e) { throw new HttpsError("unavailable", e.message); }
   }
   throw new HttpsError("invalid-argument", "Neznano dejanje.");
 });
