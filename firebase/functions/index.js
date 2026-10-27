@@ -679,7 +679,7 @@ async function skrbnik(koda) {
   const moj = crypto.createHash("sha256").update(String(koda || "")).digest("hex");
   if (!h || h.length !== moj.length || !crypto.timingSafeEqual(Buffer.from(h), Buffer.from(moj))) throw new HttpsError("permission-denied", "Napačna koda.");
 }
-exports.skrbnik = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
+exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeconds: 120 }, async (req) => {
   if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
   if (!jeLastnik(req)) await skrbnik(req.data?.koda);
   const akcija = req.data?.akcija;
@@ -687,6 +687,7 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
     const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();
     return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0 }; }) };
   }
+  if (akcija === "statistika") return require("./statistika").zberi();
   // Vsi mojstri za stran pregled (popravko.pregled.nakupko.com).
   if (akcija === "vsi") {
     const ms = (t) => t?.toMillis?.() || 0;

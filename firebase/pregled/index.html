@@ -36,6 +36,15 @@
     .nakazilo{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--bg)}
     .desno{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
     .err{color:var(--rdeca);margin:8px 0}
+    .stat{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+    .tile{background:var(--kartica);border:1px solid var(--rob);border-radius:14px;padding:12px 14px}
+    .tile .st{font-size:26px;font-weight:700;line-height:1.1}
+    .tile .op{font-size:13px;color:var(--siva)}
+    .graf{background:var(--kartica);border:1px solid var(--rob);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+    .stolpci{display:flex;align-items:flex-end;gap:2px;height:70px;margin-top:8px}
+    .stolpci div{flex:1;background:var(--zelena);border-radius:3px 3px 0 0;min-height:2px}
+    .stolpci div.prazen{background:var(--rob)}
+    .os{display:flex;justify-content:space-between;font-size:12px;color:var(--siva);margin-top:4px}
     @media (max-width:640px){.m{grid-template-columns:44px 1fr}.m img{width:44px;height:44px}.desno{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center}.filtri input{margin:6px 0 0;max-width:none}}
   </style>
 </head>
@@ -56,7 +65,7 @@
     const kdaj = (ms) => ms ? new Date(ms).toLocaleString("sl-SI", { dateStyle: "short", timeStyle: "short" }) : "–";
     const dan = (ms) => ms ? new Date(ms).toLocaleDateString("sl-SI") : "–";
     const STANJE = { potrjen: "Potrjen", caka: "Čaka na potrditev", zavrnjen: "Zavrnjen", ni: "Ni nakazal" };
-    let koda = "", podatki = null, filter = "caka", iskanje = "";
+    let koda = "", podatki = null, stat = null, filter = "caka", iskanje = "";
     try { koda = localStorage.getItem("skrbnik") || ""; filter = localStorage.getItem("pregled-filter") || "caka"; } catch (e) {}
 
     const auth = firebase.auth();
@@ -94,6 +103,7 @@
       prijava(napaka);
     }
     async function nalozi() {
+      klic({ koda, akcija: "statistika" }).then((r) => { stat = r.data; if (podatki) izrisi(); }).catch((e) => console.warn("statistika", e));
       try { podatki = (await klic({ koda, akcija: "vsi" })).data; }
       catch (e) {
         if (e.code === "functions/permission-denied" || e.code === "functions/unauthenticated") return odjava(auth.currentUser?.email ? `Naslov ${auth.currentUser.email} nima dostopa.` : e.message);
@@ -130,6 +140,27 @@
       if (m.stanje === "zavrnjen") return `<div class="nakazilo siva">Zavrnjeno ${kdaj(m.cakaOd)} · sklic ${esc(m.sklic)}</div>`;
       return "";
     }
+    function stolpci(naDan, dni = 30) {
+      const dnevi = [...Array(dni)].map((_, i) => new Date(Date.now() - (dni - 1 - i) * 864e5).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" }));
+      const v = dnevi.map((d) => naDan[d] || 0), max = Math.max(1, ...v);
+      return `<div class="stolpci">${v.map((x, i) => `<div class="${x ? "" : "prazen"}" style="height:${Math.max(3, x / max * 100)}%" title="${dnevi[i]}: ${x}"></div>`).join("")}</div>
+        <div class="os"><span>${new Date(dnevi[0]).toLocaleDateString("sl-SI")}</span><span>danes</span></div>`;
+    }
+    function statistika() {
+      if (!stat) return `<p class="siva">Nalagam statistiko …</p>`;
+      const u = stat.uporabniki, d = stat.dela, po = d.po || {};
+      const t = (st, op) => `<div class="tile"><div class="st">${st}</div><div class="op">${op}</div></div>`;
+      return `<div class="stat">
+          ${t(u.skupaj, "uporabnikov skupaj")}${t(u.novi7, "novih v 7 dneh")}${t(u.aktivni1, "aktivnih danes")}${t(u.aktivni7, "aktivnih v 7 dneh")}
+          ${t(stat.mojstri.skupaj, "mojstrov")}${t(stat.mojstri.preverjeni, "potrjenih podjetij")}
+          ${t(d.skupaj, "oddanih del")}${t(po.odprto || 0, "odprtih del")}${t((po.prevzeto || 0) + (po.opravljeno || 0), "prevzetih ali opravljenih")}
+          ${t(stat.ponudbe, "ponudb mojstrov")}${t(stat.ocene, "ocen")}
+        </div>
+        <div class="stat" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+          <div class="graf"><b>Novi uporabniki</b> <span class="siva">· zadnjih 30 dni: ${u.novi30}</span>${stolpci(u.noviNaDan)}</div>
+          <div class="graf"><b>Oddana dela</b> <span class="siva">· zadnjih 30 dni: ${d.novi30}</span>${stolpci(d.naDan)}</div>
+        </div>`;
+    }
     function izrisi() {
       const vsi = podatki.mojstri;
       const st = { caka: 0, potrjen: 0, ni: 0, zavrnjen: 0 };
@@ -138,7 +169,7 @@
       const vidni = vsi.filter((m) => (filter === "vsi" || (filter === "ni" ? m.stanje === "ni" || m.stanje === "zavrnjen" : m.stanje === filter))
         && (!q || [m.ime, m.firma, m.davcna, m.tel].join(" ").toLowerCase().includes(q)));
       const gumb = (k, t) => `<button data-f="${k}" class="${filter === k ? "izbran" : ""}">${t}</button>`;
-      el.innerHTML = `<div class="banka">${banka(podatki.banka)}</div>
+      el.innerHTML = `${statistika()}<div class="banka">${banka(podatki.banka)}</div>
         <div class="filtri">${gumb("caka", `Čaka (${st.caka})`)}${gumb("potrjen", `Potrjeni (${st.potrjen})`)}${gumb("ni", `Niso nakazali (${st.ni + st.zavrnjen})`)}${gumb("vsi", `Vsi (${vsi.length})`)}
           <input id="isci" type="search" placeholder="Išči ime, podjetje, davčno" value="${esc(iskanje)}"></div>
         ${vidni.length ? vidni.map((m) => `<div class="m">

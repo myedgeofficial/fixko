@@ -61,3 +61,4 @@ exports.statistika = onRequest({ cors: IZVORI, region: "europe-west1", timeoutSe
     res.status(e.code && String(e.code).startsWith("auth/") ? 401 : 500).json({ napaka: e.message });
   }
 });
+exports.zberi = zberi;
