@@ -19,6 +19,7 @@ const [projekt, stran, domena] = process.argv.slice(2);
   for (const skupina of d.requiredDnsUpdates?.desired || []) {
     for (const z of skupina.records || []) console.log(`::notice::DNS ${z.requiredAction || "ADD"} ${z.domainName} ${z.type} ${z.rdata}`);
   }
+  console.log(JSON.stringify({ dns: d.requiredDnsUpdates, cert: d.cert }));
   for (const skupina of d.requiredDnsUpdates?.discovered || []) {
     for (const z of skupina.records || []) console.log(`trenutno: ${z.domainName} ${z.type} ${z.rdata}`);
   }
