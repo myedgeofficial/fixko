@@ -243,7 +243,7 @@
             </div>
             ${nakazilo(m)}
           </div>
-          <div class="desno">${m.stanje !== "potrjen" ? `<button data-a="potrdi" data-uid="${esc(m.uid)}" data-ime="${esc(m.firma)}">Potrdi</button>` : ""}${m.stanje === "caka" ? `<button class="rdec" data-a="zavrni" data-uid="${esc(m.uid)}" data-ime="${esc(m.firma)}">Zavrni</button>` : ""}</div>
+          <div class="desno">${m.stanje !== "potrjen" ? `<button data-a="potrdi" data-uid="${esc(m.uid)}" data-ime="${esc(m.firma)}">Potrdi</button>` : ""}${m.stanje === "caka" ? `<button class="rdec" data-a="zavrni" data-uid="${esc(m.uid)}" data-ime="${esc(m.firma)}">Zavrni</button>` : ""}<button class="ghost" data-a="izbrisi-mojstra" data-uid="${esc(m.uid)}" data-ime="${esc(m.firma || m.ime)}">Izbriši</button></div>
         </div>`).join("") : `<p class="siva">Ni mojstrov v tem pogledu.</p>`}
         <p class="siva" style="margin-top:24px"><button class="ghost" id="odjava">Odjava</button></p>`;
       el.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { filter = b.dataset.f; try { localStorage.setItem("pregled-filter", filter); } catch (e) {} izrisi(); });
@@ -253,12 +253,14 @@
       el.querySelectorAll("[data-a]").forEach((b) => b.onclick = async () => {
         const a = b.dataset.a;
         if (a === "potrdi" && !confirm(`Potrdim podjetje »${b.dataset.ime}«? Mojster dobi obvestilo in se lahko javlja na dela.`)) return;
+        if (a === "izbrisi-mojstra" && !confirm(`Izbrišem mojstra »${b.dataset.ime}«? Izgine profil, ponudbe in ocene; dela, ki jih je imel prevzeta, se znova odprejo. Tega ni mogoče razveljaviti.`)) return;
         if (a === "zavrni" && !confirm(`Zavrnem nakazilo za »${b.dataset.ime}«? Mojster dobi obvestilo, da nakazila nismo našli.`)) return;
         b.disabled = true;
         try {
           const r = (await klic({ koda, akcija: a, uid: b.dataset.uid })).data;
           if (a === "banka-povezi" && r.url) { location.href = r.url; return; }
         } catch (e) { alert(e.message); }
+        if (a === "izbrisi-mojstra") { dela = null; klic({ koda, akcija: "statistika" }).then((r) => { stat = r.data; izrisi(); }).catch(() => {}); }
         nalozi();
       });
     }

@@ -710,6 +710,12 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
     }
     return { ok: true, izbrisanih: ids.length };
   }
+  if (akcija === "izbrisi-mojstra") {
+    const uid = String(req.data?.uid || "");
+    if (!uid || !(await db.doc("mojstri/" + uid).get()).exists) throw new HttpsError("not-found", "Mojstra ni.");
+    await pobrisiMojstra(uid);
+    return { ok: true };
+  }
   // Vsi mojstri za stran pregled (popravko.pregled.nakupko.com).
   if (akcija === "vsi") {
     const ms = (t) => t?.toMillis?.() || 0;
@@ -750,6 +756,31 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
 });
 
 /* ---------- brisanje podatkov ---------- */
+// Skrbnik izbriše mojstra: profil, ponudbe, ocene, slike. Dela, ki jih je imel prevzeta, se znova odprejo in stranka dobi obvestilo.
+async function pobrisiMojstra(uid) {
+  const brez = { mojster: FieldValue.delete(), mojsterIme: FieldValue.delete(), mojsterFirma: FieldValue.delete(), mojsterDavcna: FieldValue.delete(), mojsterPreverjen: FieldValue.delete(),
+    mojsterSlika: FieldValue.delete(), termin: FieldValue.delete(), cena: FieldValue.delete(), prevzeto: FieldValue.delete(), naPoti: FieldValue.delete(), opomnik: FieldValue.delete() };
+  const dela = await db.collection("dela").where("mojster", "==", uid).get();
+  for (const d of dela.docs) {
+    const dd = d.data(), kRef = d.ref.collection("zasebno").doc("kontakt");
+    if (dd.status === "prevzeto") {
+      await d.ref.update({ ...brez, status: "odprto", odpovedano: FieldValue.serverTimestamp() });
+      const ost = await db.collection("ponudbe").where("delo", "==", d.id).get();
+      await Promise.all(ost.docs.filter((x) => x.data().status === "odlozeno").map((x) => x.ref.update({ status: "caka" })));
+      const k = await kRef.get();
+      if (k.exists) await kRef.update({ mojsterTel: FieldValue.delete() });
+      if (k.data()?.push) await sendApns([k.data().push], "Mojster ni več na voljo", (dd.opis || strokaIme(dd.stroka)) + ". Naročilo je znova odprto.", { vloga: "N", delo: d.id }).catch(() => {});
+    } else {
+      await d.ref.update({ mojsterSlika: FieldValue.delete(), mojsterDavcna: FieldValue.delete() });
+      await kRef.set({ mojsterTel: FieldValue.delete() }, { merge: true });
+    }
+  }
+  const [pon, oc] = await Promise.all([db.collection("ponudbe").where("mojster", "==", uid).get(), db.collection("ocene").where("za", "==", uid).get()]);
+  await Promise.all([...pon.docs, ...oc.docs].map((x) => x.ref.delete()));
+  await Promise.all([db.doc("mojstri/" + uid).delete(), db.doc("profili/" + uid).delete()]);
+  await admin.storage().bucket().deleteFiles({ prefix: "profil/" + uid + "/" }).catch((e) => console.warn("profil", e.message));
+  console.log("skrbnik izbrisal mojstra", uid, "del", dela.size, "ponudb", pon.size);
+}
 // Javno klicljiva (aplikacija); brez tega je Cloud Run zavrnil klic in brisanje računa ni delovalo.
 exports.izbrisi = onCall({ invoker: "public" }, async (req) => {
   const uid = req.auth?.uid;
