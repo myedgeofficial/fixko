@@ -1,0 +1,27 @@
+name: Dnevnik strežnika
+
+# Izpiše zadnje vrstice dnevnika funkcij (za iskanje napak). Ne spreminja ničesar.
+on:
+  workflow_dispatch:
+    inputs:
+      funkcija:
+        description: "Ime funkcije (prazno = vse)"
+        default: ""
+      vrstic:
+        description: "Število vrstic"
+        default: "200"
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dnevnik
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT: ${{ vars.FIREBASE_PROJECT || 'fixko-app' }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          F="${{ inputs.funkcija }}"
+          npx --yes firebase-tools@14 --project "$FIREBASE_PROJECT" --non-interactive functions:log ${F:+--only "$F"} -n "${{ inputs.vrstic }}"
+          rm -f "$RUNNER_TEMP/sa.json"
