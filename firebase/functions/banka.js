@@ -56,13 +56,20 @@ const cisto = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").to
 // Ime plačnika na izpisku se ujema s podjetjem, če se ujema vsaj ena pomembna beseda (npr. »KOS INSTALACIJE MARKO KOS SP« ↔ »Kos inštalacije, Marko Kos s.p.«).
 // Splošne besede ne štejejo; ujemati se morata vsaj dve pomembni besedi (ali edina, če ima ime samo eno).
 const SPLOSNE = new Set("storitve storitev servis instalacije inst gradnje gradbenistvo gradbeni gradbena trgovina podjetje druzba inzeniring montaza montaze vodovod elektro zakljucna dela obrt obrtnik the and sistemi tehnika team group".split(" "));
-function ujema(placnik, firma) {
-  const pom = (t) => cisto(t).split(" ").filter((w) => w.length >= 3 && !SPLOSNE.has(w));
+// Tuja podjetja (drzava ≠ SI): odstranimo še tuje pravne oblike in pogoste splošne besede; slovensko ujemanje ostane, kot je.
+const TUJE_OBLIKE = /b(gmbh|ag|kg|ohg|ug|e\s*k|e\s*u|ltd|limited|llc|inc|plc|llp|sarl|sas|sasu|eurl|sa|srl|s\s*r\s*l|spa|s\s*p\s*a|snc|sas|sl|s\s*l|slu|bv|b\s*v|nv|n\s*v|vof|bvba|sprl|lda|unipessoal|sp\s*z\s*o\s*o|sp\s*j|j\s*d\s*o\s*o|obrt|zoo|s\s*r\s*o|kft|bt|zrt|ab|as|oy|aps)b\.?/g;
+const TUJE_SPLOSNE = new Set("bau bauunternehmen haustechnik sanitar heizung elektrotechnik malerbetrieb handwerk service services building construction plumbing electrical solutions company group home homes renovation renovations batiment travaux plomberie impianti edilizia costruzioni servizi construcciones reformas instalaciones servicios construcoes servicos bouw installatie installaties techniek usługi uslugi budownictwo instalacje gradnja usluge".split(" "));
+function ujema(placnik, firma, drzava) {
+  const tuje = !!drzava && drzava !== "SI";
+  // Banke pišejo »MUELLER« za »Müller«: pri tujih poenotimo ue/oe/ae.
+  const pom = (t) => (tuje ? cisto(t).replace(TUJE_OBLIKE, " ").replace(/ue/g, "u").replace(/oe/g, "o").replace(/ae/g, "a") : cisto(t)).split(" ").filter((w) => w.length >= 3 && !SPLOSNE.has(w) && !(tuje && TUJE_SPLOSNE.has(w)));
   const a = new Set(pom(placnik)), f = [...new Set(pom(firma))];
   if (!f.length) return false;
   return f.filter((w) => a.has(w)).length >= Math.min(2, f.length);
 }
 const sklicV = (t) => { const m = String(t || "").replace(/\s/g, "").match(/SI00(\d{8})/i); return m ? "SI00 " + m[1] : ""; };
+// Tuje banke sklic včasih spremenijo (»SI00-1234 5678«, brez SI00): če SI00 ni, vzamemo 8-mestno število, ki ga potem poiščemo med mojstri.
+const sklicTuj = (t) => { const m = String(t || "").replace(/[\s.-]/g, "").match(/(?:SI0{2}|SIOO)?(\d{8})(?!\d)/i); return m ? "SI00 " + m[1] : ""; };
 
 // Vsakih 5 minut: novi prilivi 0,01 € → potrditev ali ročni pregled.
 async function preglej(potrdi) {
@@ -80,19 +87,22 @@ async function preglej(potrdi) {
   const obdelani = new Set(nast.obdelani || []);
   const nova = tx.filter((t) => t.credit_debit_indicator === "CRDT" && Number(t.transaction_amount?.amount) === 0.01 && t.transaction_amount?.currency === "EUR");
   const kandidati = nova.map((t) => ({ id: t.entry_reference || t.transaction_id || crypto.createHash("sha1").update(JSON.stringify(t)).digest("hex"), t,
-    sklic: sklicV(t.reference_number) || sklicV((t.remittance_information || []).join(" ")) })).filter((k) => k.sklic && !obdelani.has(k.id));
+    sklic: sklicV(t.reference_number) || sklicV((t.remittance_information || []).join(" ")) || "", tuj: sklicTuj((t.remittance_information || []).join(" ")) || sklicTuj(t.reference_number) }))
+    .map((k) => (k.sklic ? k : { ...k, sklic: k.tuj, samoTuji: true })).filter((k) => k.sklic && !obdelani.has(k.id));
   const rezultat = [];
   if (kandidati.length) {
-    const mojstri = await db().collection("mojstri").select("firma", "davcna", "preverjeno", "push").get();
+    const mojstri = await db().collection("mojstri").select("firma", "davcna", "preverjeno", "push", "drzava", "jezik").get();
     const poSklicu = new Map(mojstri.docs.map((d) => [sklicIz(d.id), d]));
     for (const k of kandidati) {
       const d = poSklicu.get(k.sklic);
+      // Sklic brez »SI00« velja samo za tuje mojstre (slovenski tok ostane, kot je bil).
+      if (k.samoTuji && (!d || (d.data().drzava || "SI") === "SI")) continue;
       obdelani.add(k.id);
       const placnik = k.t.debtor?.name || "", iban = k.t.debtor_account?.iban || "";
       if (!d) { rezultat.push({ sklic: k.sklic, izid: "ni mojstra", placnik, iban }); continue; }
       const m = d.data(), o = { sklic: k.sklic, placnik, iban, uid: d.id, firma: m.firma || "", davcna: m.davcna || "" };
       if (m.preverjeno && m.preverjeno.davcna === (m.davcna || "")) { rezultat.push({ ...o, izid: "že potrjen" }); continue; }
-      if (ujema(placnik, m.firma)) {
+      if (ujema(placnik, m.firma, m.drzava)) {
         await potrdi(d.ref, m, { samodejno: true, placnik, iban });
         rezultat.push({ ...o, izid: "potrjen" });
       } else {

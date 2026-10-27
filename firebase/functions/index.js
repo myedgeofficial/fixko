@@ -15,7 +15,7 @@ const admin = require("firebase-admin");
 const { Timestamp, FieldValue } = require("firebase-admin/firestore");
 const http2 = require("http2");
 const crypto = require("crypto");
-const { opisTermina, strokaIme, veljavnaDavcna, testnaFirma, sklicIz, jePreverjen } = require("./besedila");
+const { opisTermina, strokaIme, davcnaOk, testnaFirma, sklicIz, jePreverjen, pokriva, T } = require("./besedila");
 const banka = require("./banka");
 const mod = require("./moderacija");
 
@@ -82,6 +82,11 @@ function apns(tokens, title, body, data = {}) {
   return Promise.all(tokens.map(one)).finally(() => client.close());
 }
 
+// Jezik in časovni pas prejemnika (mojster ali kontakt stranke); slovenski uporabniki jih nimajo shranjenih.
+const jzk = (x) => (x && typeof x.jezik === "string" && x.jezik) || "sl";
+const termin = (ms, x) => opisTermina(ms, Date.now(), jzk(x), x?.tz || "");
+const opisDela = (d, x) => d.opis || strokaIme(d.stroka, jzk(x));
+
 /* ---------- novo delo → obvestila mojstrom ---------- */
 exports.novoDelo = onDocumentCreated({ document: "dela/{id}", secrets: ["MAIL_PASS"] }, async (event) => {
   const delo = event.data?.data();
@@ -98,12 +103,18 @@ exports.novoDelo = onDocumentCreated({ document: "dela/{id}", secrets: ["MAIL_PA
   const ujemajo = snap.docs.filter((d) => {
     const m = d.data();
     return d.id !== delo.lastnik && m.narocninaDo && m.narocninaDo.toMillis() > now.toMillis()
-      && (m.regije || []).some((r) => r === "vsa" || r === delo.regija);
+      && (m.regije || []).some((r) => pokriva(r, delo.regija));
   });
   await event.data.ref.update({ obvesceni: ujemajo.length });
-  const title = "Novo delo: " + (delo.opis || strokaIme(delo.stroka));
-  const body = [delo.kraj, delo.kdaj, delo.m2 ? `~${delo.m2} m²` : "", delo.budget && delo.budget !== "Ne vem" ? delo.budget : ""].filter(Boolean).join(" · ");
-  const res = await sendApns(ujemajo.map((d) => d.data().push), title, body, { vloga: "M", delo: event.params.id });
+  // Obvestila po jeziku mojstrov (slovenski kot doslej).
+  const poJeziku = new Map();
+  for (const d of ujemajo) { const j = jzk(d.data()); poJeziku.set(j, [...(poJeziku.get(j) || []), d.data().push]); }
+  const res = [];
+  for (const [j, zetoni] of poJeziku) {
+    const title = T(j, "Novo delo: {0}", opisDela(delo, { jezik: j }));
+    const body = [delo.kraj, T(j, delo.kdaj || ""), delo.m2 ? `~${delo.m2} m²` : "", delo.budget && delo.budget !== "Ne vem" ? T(j, delo.budget) : ""].filter(Boolean).join(" · ");
+    res.push(...await sendApns(zetoni, title, body, { vloga: "M", delo: event.params.id }));
+  }
   // Neveljavne žetone (aplikacija izbrisana) pobrišemo.
   const slabi = res.filter((r) => r.status === 410 || (r.status === 400 && /BadDeviceToken/.test(r.data))).map((r) => r.token);
   await Promise.all(ujemajo.filter((d) => slabi.includes(d.data().push)).map((d) => d.ref.update({ push: FieldValue.delete() })));
@@ -116,9 +127,10 @@ const OPOZORIL_ZA_BLOKADO = 2; // po toliko zavrnjenih slikah uporabnik ne more 
 const MODERACIJA_URL = "https://fixko-app.web.app/moderacija";
 const PREGLED_URL = "https://popravko.pregled.nakupko.com";
 
-async function obvestiStranko(id, naslov, besedilo) {
+async function obvestiStranko(id, naslov, besedilo, pritozba = "") {
   const k = await db.doc("dela/" + id + "/zasebno/kontakt").get();
-  if (k.exists && k.data().push) await sendApns([k.data().push], naslov, besedilo, { vloga: "N", delo: id }).catch(() => {});
+  const j = jzk(k.data());
+  if (k.exists && k.data().push) await sendApns([k.data().push], T(j, naslov), T(j, besedilo) + (pritozba ? T(j, pritozba) : ""), { vloga: "N", delo: id }).catch(() => {});
 }
 // Skrije objavo vsem mojstrom (status preklicano), shrani zapis za skrbnika in ga obvesti. Slike ostanejo, dokler skrbnik ne odloči.
 async function skrij(ref, delo, razlog, opis, naslov, besedilo) {
@@ -127,7 +139,7 @@ async function skrij(ref, delo, razlog, opis, naslov, besedilo) {
     delo: ref.id, lastnik: delo.lastnik, razlog, opis, stanje: "skrito", ob: FieldValue.serverTimestamp(),
     stroka: delo.stroka || "", besedilo: delo.opis || "", kraj: delo.kraj || "", slike: [delo.slika, ...(delo.slike || [])].filter(Boolean)
   }, { merge: true });
-  if (naslov) await obvestiStranko(ref.id, naslov, besedilo + " Pritožba: support@remako.si");
+  if (naslov) await obvestiStranko(ref.id, naslov, besedilo, " Pritožba: support@remako.si");
   await mod.posljiSkrbniku("Popravko: skrita objava (" + razlog + ")", `${opis}\n\n${strokaIme(delo.stroka)}, ${delo.kraj}: ${delo.opis || ""}\n\nOdloči tukaj: ${MODERACIJA_URL}`);
   console.log("skrito", ref.id, razlog, opis);
 }
@@ -236,7 +248,7 @@ exports.prevzemi = onCall(async (req) => {
     const [m, d, k] = await Promise.all([t.get(mRef), t.get(dRef), t.get(kRef)]);
     if (!m.exists || !(m.data().narocninaDo?.toMillis() > Date.now())) throw new HttpsError("permission-denied", "Naročnina ni aktivna.");
     const md = m.data();
-    if (!md.slika || !md.firma || !(veljavnaDavcna(md.davcna) || testnaFirma(md.firma)) || !md.pogoji) throw new HttpsError("failed-precondition", "Dopolni profil: slika, podjetje in davčna številka.");
+    if (!md.slika || !md.firma || !davcnaOk(md) || !md.pogoji) throw new HttpsError("failed-precondition", "Dopolni profil: slika, podjetje in davčna številka.");
     if (!d.exists) throw new HttpsError("not-found", "Dela ni več.");
     if (d.data().status !== "odprto") throw new HttpsError("already-exists", "Delo je že prevzeto.");
     if (d.data().lastnik === uid) throw new HttpsError("failed-precondition", "Svojega dela ne moreš prevzeti.");
@@ -248,14 +260,15 @@ exports.prevzemi = onCall(async (req) => {
     return { delo: d.data(), kontakt: k.exists ? k.data() : {}, mojster: m.data() };
   });
   if (kontakt.push) {
-    await sendApns([kontakt.push], mojster.ime + " pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Pred prihodom vas pokliče.", { vloga: "N", delo: id });
+    const j = jzk(kontakt);
+    await sendApns([kontakt.push], T(j, "{0} pride {1}", mojster.ime, opisTermina(termin, Date.now(), j, kontakt.tz)), T(j, "{0}. Pred prihodom vas pokliče.", opisDela(delo, kontakt)), { vloga: "N", delo: id });
   }
   return { tel: kontakt.tel || "" };
 });
 
 /* ---------- ponudba mojstra → stranka sprejme ali zavrne ---------- */
 // Mojster se javi s terminom (in okvirno ceno). Delo ostane odprto in vidno vsem, dokler stranka ne sprejme ene ponudbe.
-const profilOk = (md) => md.slika && md.firma && (veljavnaDavcna(md.davcna) || testnaFirma(md.firma)) && md.pogoji;
+const profilOk = (md) => md.slika && md.firma && davcnaOk(md) && md.pogoji;
 exports.ponudi = onCall(async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
@@ -285,7 +298,7 @@ exports.ponudi = onCall(async (req) => {
     return { delo: d.data(), kontakt: k.exists ? k.data() : {}, md, nova: !p.exists };
   });
   if (nova && kontakt.push) {
-    await sendApns([kontakt.push], md.ime + " lahko pride " + opisTermina(termin), (delo.opis || strokaIme(delo.stroka)) + ". Odprite Popravko in potrdite mojstra.", { vloga: "N", delo: id });
+    await sendApns([kontakt.push], T(jzk(kontakt), "{0} lahko pride {1}", md.ime, opisTermina(termin, Date.now(), jzk(kontakt), kontakt.tz)), T(jzk(kontakt), "{0}. Odprite Popravko in potrdite mojstra.", opisDela(delo, kontakt)), { vloga: "N", delo: id });
   }
   return { ok: true };
 });
@@ -316,7 +329,7 @@ exports.odgovori = onCall(async (req) => {
     return { delo: d.data(), md };
   });
   if (sprejmi && md.push) {
-    await sendApns([md.push], "Stranka vas je izbrala", (delo.opis || strokaIme(delo.stroka)) + ", " + delo.kraj + ". Pokličite stranko.", { vloga: "M", delo: id });
+    await sendApns([md.push], T(jzk(md), "Stranka vas je izbrala"), T(jzk(md), "{0}, {1}. Pokličite stranko.", opisDela(delo, md), delo.kraj), { vloga: "M", delo: id });
   }
   return { ok: true, tel: sprejmi ? md.tel || "" : "" };
 });
@@ -349,11 +362,12 @@ exports.odpovej = onCall(async (req) => {
     if (k.exists) t.update(kRef, { mojsterTel: FieldValue.delete() });
     return { dd, kontakt: k.exists ? k.data() : {}, md: m?.exists ? m.data() : {}, stranka, ostale: vse.docs.filter((x) => x.ref.path !== izbrana && x.data().status === "odlozeno").length };
   });
-  const opis = r.dd.opis || strokaIme(r.dd.stroka);
   if (r.stranka && r.dd.status === "prevzeto" && r.md.push) {
-    await sendApns([r.md.push], "Stranka je odpovedala termin", opis + ", " + r.dd.kraj + ".", { vloga: "M", delo: id });
+    const j = jzk(r.md);
+    await sendApns([r.md.push], T(j, "Stranka je odpovedala termin"), T(j, "{0}, {1}.", opisDela(r.dd, r.md), r.dd.kraj), { vloga: "M", delo: id });
   } else if (!r.stranka && r.kontakt.push) {
-    await sendApns([r.kontakt.push], (r.md.ime || "Mojster") + " je odpovedal termin", opis + ". Naročilo je znova odprto" + (r.ostale ? ", izberete lahko drugega mojstra." : ", obvestili bomo druge mojstre."), { vloga: "N", delo: id });
+    const j = jzk(r.kontakt);
+    await sendApns([r.kontakt.push], T(j, "{0} je odpovedal termin", r.md.ime || T(j, "Mojster")), T(j, r.ostale ? "{0}. Naročilo je znova odprto, izberete lahko drugega mojstra." : "{0}. Naročilo je znova odprto, obvestili bomo druge mojstre.", opisDela(r.dd, r.kontakt)), { vloga: "N", delo: id });
   }
   return { ok: true };
 });
@@ -364,7 +378,7 @@ async function pobrisiDelo(dRef, dd) {
   const id = dRef.id;
   if (dd.status === "prevzeto" && dd.mojster) {
     const m = await db.doc("mojstri/" + dd.mojster).get();
-    if (m.exists && m.data().push) await sendApns([m.data().push], "Stranka je preklicala naročilo", (dd.opis || strokaIme(dd.stroka)) + ", " + dd.kraj + ". Ne hodite tja.", { vloga: "M", delo: id }).catch(() => {});
+    if (m.exists && m.data().push) await sendApns([m.data().push], T(jzk(m.data()), "Stranka je preklicala naročilo"), T(jzk(m.data()), "{0}, {1}. Ne hodite tja.", opisDela(dd, m.data()), dd.kraj), { vloga: "M", delo: id }).catch(() => {});
   }
   const pon = await db.collection("ponudbe").where("delo", "==", id).get();
   const batch = db.batch();
@@ -414,7 +428,7 @@ exports.oceni = onCall(async (req) => {
   });
   if (r.smer === "M") {
     const m = await db.doc("mojstri/" + r.dd.mojster).get();
-    if (m.exists && m.data().push) await sendApns([m.data().push], "Stranka vas je ocenila: " + "★".repeat(zvezdice), "Če želite, v Popravku ocenite še stranko.", { vloga: "M", delo: id }).catch(() => {});
+    if (m.exists && m.data().push) await sendApns([m.data().push], T(jzk(m.data()), "Stranka vas je ocenila: {0}", "★".repeat(zvezdice)), T(jzk(m.data()), "Če želite, v Popravku ocenite še stranko."), { vloga: "M", delo: id }).catch(() => {});
   }
   return { ok: true };
 });
@@ -429,7 +443,7 @@ exports.naPoti = onCall(async (req) => {
   if (!d.exists || d.data().mojster !== uid || d.data().status !== "prevzeto") throw new HttpsError("failed-precondition", "To ni tvoj termin.");
   await dRef.update({ naPoti: FieldValue.serverTimestamp() });
   const k = await dRef.collection("zasebno").doc("kontakt").get();
-  if (k.exists && k.data().push) await sendApns([k.data().push], (d.data().mojsterIme || "Mojster") + " je na poti", (d.data().opis || strokaIme(d.data().stroka)) + ". Kmalu bo pri vas.", { vloga: "N", delo: id });
+  if (k.exists && k.data().push) { const j = jzk(k.data()); await sendApns([k.data().push], T(j, "{0} je na poti", d.data().mojsterIme || T(j, "Mojster")), T(j, "{0}. Kmalu bo pri vas.", opisDela(d.data(), k.data())), { vloga: "N", delo: id }); }
   return { ok: true };
 });
 
@@ -441,30 +455,34 @@ const SOSEDNJE = {
   kk: ["nm", "za", "ce"], za: ["lj", "ce", "kk", "nm"], po: ["lj", "kp", "ng", "nm"]
 };
 const uraSlo = () => Number(new Intl.DateTimeFormat("sl-SI", { hour: "numeric", hourCycle: "h23", timeZone: "Europe/Ljubljana" }).format(new Date()));
-const pushStranke = async (id) => (await db.doc("dela/" + id + "/zasebno/kontakt").get()).data()?.push;
-const pushMojstra = async (uid) => (uid ? (await db.doc("mojstri/" + uid).get()).data()?.push : null);
+// Kontakt stranke in mojster (žeton, jezik, časovni pas).
+const kontaktStranke = async (id) => (await db.doc("dela/" + id + "/zasebno/kontakt").get()).data() || {};
+const podatkiMojstra = async (uid) => (uid ? (await db.doc("mojstri/" + uid).get()).data() || {} : {});
 exports.opomniki = onSchedule({ schedule: "every 10 minutes", region: "europe-west1", timeoutSeconds: 120 }, async () => {
   const now = Date.now(), H = 3600e3, mirno = uraSlo() < 8 || uraSlo() >= 21; // ponoči ne motimo
   const prevzeta = await db.collection("dela").where("status", "==", "prevzeto").get();
   for (const d of prevzeta.docs) {
-    const j = d.data(), t = Number(j.termin), o = j.opomnik || {}, opis = j.opis || strokaIme(j.stroka);
+    const j = d.data(), t = Number(j.termin), o = j.opomnik || {};
     if (!t) continue;
     const ostane = t - now;
     // Dan prej (samo če je bil termin dogovorjen vsaj dan vnaprej) in uro prej.
     if (!o.dan && ostane <= 24 * H && ostane > 3 * H && (j.prevzeto?.toMillis() || now) <= t - 24 * H) {
       await d.ref.update({ "opomnik.dan": true });
-      await sendApns([await pushStranke(d.id)], "Jutri pride " + (j.mojsterIme || "mojster"), opis + ", " + opisTermina(t) + ".", { vloga: "N", delo: d.id }).catch(() => {});
-      await sendApns([await pushMojstra(j.mojster)], "Jutri imaš termin", opis + ", " + j.kraj + ", " + opisTermina(t) + ".", { vloga: "M", delo: d.id }).catch(() => {});
+      const s = await kontaktStranke(d.id), m = await podatkiMojstra(j.mojster);
+      await sendApns([s.push], T(jzk(s), "Jutri pride {0}", j.mojsterIme || T(jzk(s), "mojster")), T(jzk(s), "{0}, {1}.", opisDela(j, s), termin(t, s)), { vloga: "N", delo: d.id }).catch(() => {});
+      await sendApns([m.push], T(jzk(m), "Jutri imaš termin"), T(jzk(m), "{0}, {1}, {2}.", opisDela(j, m), j.kraj, termin(t, m)), { vloga: "M", delo: d.id }).catch(() => {});
     }
     if (!o.ura && ostane <= 65 * 60e3 && ostane > 0) {
       await d.ref.update({ "opomnik.ura": true });
-      await sendApns([await pushStranke(d.id)], (j.mojsterIme || "Mojster") + " pride čez dobro uro", opis + ".", { vloga: "N", delo: d.id }).catch(() => {});
-      await sendApns([await pushMojstra(j.mojster)], "Termin čez dobro uro", opis + ", " + j.kraj + ".", { vloga: "M", delo: d.id }).catch(() => {});
+      const s = await kontaktStranke(d.id), m = await podatkiMojstra(j.mojster);
+      await sendApns([s.push], T(jzk(s), "{0} pride čez dobro uro", j.mojsterIme || T(jzk(s), "Mojster")), T(jzk(s), "{0}.", opisDela(j, s)), { vloga: "N", delo: d.id }).catch(() => {});
+      await sendApns([m.push], T(jzk(m), "Termin čez dobro uro"), T(jzk(m), "{0}, {1}.", opisDela(j, m), j.kraj), { vloga: "M", delo: d.id }).catch(() => {});
     }
     // Dan po terminu: ali je bilo delo opravljeno? (stranka potrdi in oceni mojstra)
     if (!o.ocena && !mirno && ostane < -20 * H && ostane > -7 * 24 * H) {
       await d.ref.update({ "opomnik.ocena": true });
-      await sendApns([await pushStranke(d.id)], "Je bilo delo opravljeno?", "Tapnite Delo je opravljeno in ocenite " + (j.mojsterIme || "mojstra") + ".", { vloga: "N", delo: d.id }).catch(() => {});
+      const s = await kontaktStranke(d.id);
+      await sendApns([s.push], T(jzk(s), "Je bilo delo opravljeno?"), T(jzk(s), "Tapnite Delo je opravljeno in ocenite {0}.", j.mojsterIme || T(jzk(s), "mojstra")), { vloga: "N", delo: d.id }).catch(() => {});
     }
   }
   if (mirno) return;
@@ -481,11 +499,17 @@ exports.opomniki = onSchedule({ schedule: "every 10 minutes", region: "europe-we
     });
     if (!novi.length) continue;
     await d.ref.update({ obvesceni: FieldValue.increment(novi.length) });
-    await sendApns(novi.map((m) => m.data().push), "Delo v bližini: " + (j.opis || strokaIme(j.stroka)), [j.kraj, j.kdaj].filter(Boolean).join(" · ") + ". Nihče se še ni javil.", { vloga: "M", delo: d.id }).catch(() => {});
-    await sendApns([await pushStranke(d.id)], "Obvestili smo še mojstre iz okolice", (j.opis || strokaIme(j.stroka)) + ". Ko se kdo javi, dobite obvestilo.", { vloga: "N", delo: d.id }).catch(() => {});
+    for (const m of novi) {
+      const x = m.data();
+      await sendApns([x.push], T(jzk(x), "Delo v bližini: {0}", opisDela(j, x)), T(jzk(x), "{0}. Nihče se še ni javil.", [j.kraj, T(jzk(x), j.kdaj || "")].filter(Boolean).join(" · ")), { vloga: "M", delo: d.id }).catch(() => {});
+    }
+    const s = await kontaktStranke(d.id);
+    await sendApns([s.push], T(jzk(s), "Obvestili smo še mojstre iz okolice"), T(jzk(s), "{0}. Ko se kdo javi, dobite obvestilo.", opisDela(j, s)), { vloga: "N", delo: d.id }).catch(() => {});
   }
 });
 
+// Jezik prepisa po jeziku aplikacije (privzeto slovenščina).
+const GOVOR = { en: "en-GB", de: "de-DE", fr: "fr-FR", it: "it-IT", es: "es-ES", pt: "pt-PT", nl: "nl-NL", pl: "pl-PL", hr: "hr-HR" };
 // Prepis glasu v besedilo (Google Speech-to-Text, slovenščina). Največ 30 s, omejeno na 30 prepisov na dan na uporabnika.
 exports.prepisi = onCall({ memory: "512MiB" }, async (req) => {
   const uid = req.auth?.uid;
@@ -503,7 +527,7 @@ exports.prepisi = onCall({ memory: "512MiB" }, async (req) => {
   const zeton = await (await new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] }).getClient()).getAccessToken();
   const r = await fetch("https://eu-speech.googleapis.com/v1/speech:recognize", {
     method: "POST", headers: { Authorization: "Bearer " + zeton.token, "content-type": "application/json" },
-    body: JSON.stringify({ config: { encoding: "LINEAR16", sampleRateHertz: 16000, languageCode: "sl-SI", maxAlternatives: 1 }, audio: { content: zvok } })
+    body: JSON.stringify({ config: { encoding: "LINEAR16", sampleRateHertz: 16000, languageCode: GOVOR[req.data?.jezik] || "sl-SI", maxAlternatives: 1 }, audio: { content: zvok } })
   });
   const j = await r.json();
   if (!r.ok) { console.error("prepis", r.status, JSON.stringify(j).slice(0, 500)); throw new HttpsError("internal", "Prepis trenutno ne deluje."); }
@@ -523,7 +547,8 @@ exports.prosiSlike = onCall(async (req) => {
   await d.ref.update({ prosnja: { ime: m.data().ime || "Mojster", sporocilo, cas: FieldValue.serverTimestamp() } });
   const k = await db.doc("dela/" + id + "/zasebno/kontakt").get();
   if (k.exists && k.data().push) {
-    await sendApns([k.data().push], (m.data().ime || "Mojster") + " prosi za več slik", sporocilo || (d.data().opis || strokaIme(d.data().stroka)) + ". Dodajte jih v Popravku.", { vloga: "N", delo: id });
+    const j = jzk(k.data());
+    await sendApns([k.data().push], T(j, "{0} prosi za več slik", m.data().ime || T(j, "Mojster")), sporocilo || T(j, "{0}. Dodajte jih v Popravku.", opisDela(d.data(), k.data())), { vloga: "N", delo: id });
   }
   return { ok: true };
 });
@@ -622,9 +647,42 @@ Pregled: ${PREGLED_URL}`);
   return { sklic: sklicIz(uid) };
 });
 
+// Tuje podjetje brez evrskega računa: pregled skrbnika; za EU podjetja prej preverimo DDV številko v VIES (Evropska komisija).
+const EU = new Set("AT BE BG CY CZ DE DK EE ES FI FR GR HR HU IE IT LT LU LV MT NL PL PT RO SE SK".split(" "));
+async function vies(davcna) {
+  const cc = davcna.slice(0, 2), st = davcna.slice(2);
+  const r = await fetch(`https://ec.europa.eu/taxation_customs/vies/rest-api/ms/${cc}/vat/${encodeURIComponent(st)}`, { headers: { accept: "application/json" } });
+  if (!r.ok) throw new Error("VIES " + r.status);
+  const j = await r.json();
+  if (j.userError && j.userError !== "VALID" && j.userError !== "INVALID") throw new Error("VIES " + j.userError);
+  const cisto = (x) => (x && x !== "---" ? String(x).replace(/\s+/g, " ").trim().slice(0, 200) : "");
+  return { veljavna: !!j.isValid, ime: cisto(j.name), naslov: cisto(j.address) };
+}
+exports.pregledPodjetja = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const mRef = db.doc("mojstri/" + uid);
+  const m = await mRef.get();
+  if (!m.exists || !profilOk(m.data())) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
+  const md = m.data(), cc = md.drzava || "SI";
+  if (cc === "SI") throw new HttpsError("failed-precondition", "Najprej potrdi podjetje (nakazilo 0,01 €).");
+  let v = null;
+  if (EU.has(cc)) {
+    try { v = await vies(String(md.davcna || "")); } catch (e) { console.warn("vies", uid, e.message); }
+    if (v && !v.veljavna) throw new HttpsError("failed-precondition", "DDV številka v sistemu VIES ni veljavna. Preveri jo v profilu.");
+  }
+  await mRef.update({ preverjanje: { cakam: true, nacin: v ? "vies" : "rocno", sklic: sklicIz(uid), davcna: md.davcna || "", ...(v ? { vies: v } : {}), ob: FieldValue.serverTimestamp() } });
+  await mod.posljiSkrbniku("Popravko: tuje podjetje čaka na pregled (" + cc + ")", `${md.ime || ""}, ${md.firma || ""}
+DDV: ${md.davcna || "-"} · Telefon: ${md.tel || "-"}
+VIES: ${v ? (v.veljavna ? "veljavna" : "NI veljavna") + (v.ime ? ", " + v.ime : "") + (v.naslov ? ", " + v.naslov : "") : EU.has(cc) ? "ni odgovora, preveri ročno" : "ni EU, preveri v registru države"}
+
+Pregled: ${PREGLED_URL}`);
+  return { ok: true, vies: v };
+});
+
 async function potrdiMojstra(mRef, md, kako) {
   await mRef.update({ preverjeno: { davcna: md.davcna || "", ob: FieldValue.serverTimestamp(), ...kako }, preverjanje: FieldValue.delete() });
-  if (md.push) await sendApns([md.push], "Podjetje je potrjeno", "Zdaj se lahko javljaš na dela.", { vloga: "M" });
+  if (md.push) await sendApns([md.push], T(jzk(md), "Podjetje je potrjeno"), T(jzk(md), "Zdaj se lahko javljaš na dela."), { vloga: "M" });
   return { ok: true };
 }
 
@@ -690,7 +748,7 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
   const akcija = req.data?.akcija;
   if (akcija === "seznam") {
     const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();
-    return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0 }; }) };
+    return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0, drzava: m.drzava || "SI", nacin: m.preverjanje?.nacin || "nakazilo", vies: m.preverjanje?.vies || null }; }) };
   }
   if (akcija === "statistika") return require("./statistika").zberi();
   // Vsa dela (zadnjih 300) in brisanje kateregakoli dela, za stran pregled.
@@ -742,7 +800,7 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
     const md = m.data();
     if (akcija === "potrdi") return potrdiMojstra(mRef, md, { samodejno: false });
     await mRef.update({ preverjanje: { cakam: false, zavrnjeno: true, sklic: sklicIz(m.id), ob: FieldValue.serverTimestamp() } });
-    if (md.push) await sendApns([md.push], "Nakazila nismo našli", "Preveri, da si nakazal s TRR podjetja in s pravim sklicem.", { vloga: "M" });
+    if (md.push) await sendApns([md.push], T(jzk(md), "Nakazila nismo našli"), T(jzk(md), "Preveri, da si nakazal s TRR podjetja in s pravim sklicem."), { vloga: "M" });
     return { ok: true };
   }
   if (akcija === "banka-stanje") return banka.stanje();

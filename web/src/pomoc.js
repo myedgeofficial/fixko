@@ -1,7 +1,9 @@
 // Samodejna prepoznava: stroka iz opisa in kraj/regija iz lokacije ali vpisanega kraja.
 // Vse deluje na napravi, brez pošiljanja lokacije drugam.
 
-export const brezSumnikov = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+import { BESEDE_JEZIKI, SESTAVLJENKE } from "./stroke-jeziki.js";
+
+export const brezSumnikov = (s) => String(s || "").toLowerCase().replace(/ß/g, "ss").replace(/ł/g, "l").replace(/[øœ]/g, "o").replace(/æ/g, "ae").normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 // Besede po strokah (brez šumnikov, male črke). Pravila zapisa:
 //   pip      začetek besede (pipa, pipe, pipo ...), 1 točka
@@ -139,7 +141,7 @@ for (const [k, v] of Object.entries(DODATNO)) BESEDE[k] += " " + v;
 
 // Vsaka beseda šteje enkrat (najmočnejše ujemanje), besedne zveze dodatno po 3 točke.
 // Med besedami zveze sta lahko največ dve drugi besedi ("rina je zamašena").
-const DELI = Object.entries(BESEDE).map(([k, niz]) => {
+const razcleni = (B) => Object.entries(B).map(([k, niz]) => {
   const besede = [], zveze = [];
   for (let v of brezSumnikov(niz).split(/\s+/).filter(Boolean)) {
     const tock = v.endsWith("!!") ? 4 : v.endsWith("!") ? 2 : 1; v = v.replace(/!+$/, "");
@@ -150,6 +152,8 @@ const DELI = Object.entries(BESEDE).map(([k, niz]) => {
   }
   return [k, besede, zveze];
 });
+const DELI = razcleni(BESEDE);
+const DELI_JEZIKI = {};
 
 const PREDPONE = ["pre", "po", "za", "na", "pri", "raz", "iz", "od", "pod", "s", "z", "o", "u", "v"];
 
@@ -166,18 +170,23 @@ function enaNapaka(a, b) {
 const zNapako = (sl, w) => w.length >= 5 && sl.length >= 4 && [w.length - 1, w.length, w.length + 1].some((n) => n <= sl.length && enaNapaka(sl.slice(0, n), w));
 
 // Vrne ključ stroke ali "" če ne prepozna.
-export function prepoznajStroko(besedilo) {
+// Jezik: slovenščina (privzeto, z narečji) ali drug jezik aplikacije s svojim seznamom besed.
+export function prepoznajStroko(besedilo, jezik = "sl") {
   const cisto = brezSumnikov(besedilo).replace(/[^a-z0-9]+/g, " ").trim();
   if (cisto.length < 2) return "";
+  const sl0 = jezik === "sl" || !BESEDE_JEZIKI[jezik];
+  const deli = sl0 ? DELI : (DELI_JEZIKI[jezik] ||= razcleni(BESEDE_JEZIKI[jezik]));
+  // Nemščina, nizozemščina: sestavljenke (Küchenwasserhahn) ujamejo besedo tudi sredi besede.
+  const sredi = !sl0 && SESTAVLJENKE.includes(jezik);
   const t = " " + cisto + " ", slova = cisto.split(" ");
   // Tudi glagoli s predpono: prefarbat, zasraufat, odzracit ... ujamejo osnovo (farb, sraufat, zrac).
-  const brez = slova.map((sl) => PREDPONE.map((p) => (sl.startsWith(p) && sl.length - p.length >= 4 ? sl.slice(p.length) : "")).filter(Boolean));
-  const tocke = DELI.map(([k, besede, zveze]) => {
+  const brez = slova.map((sl) => (sl0 ? PREDPONE : []).map((p) => (sl.startsWith(p) && sl.length - p.length >= 4 ? sl.slice(p.length) : "")).filter(Boolean));
+  const tocke = deli.map(([k, besede, zveze]) => {
     const m = slova.map((sl, i) => {
       let n = 0;
       for (const b of besede) {
         if (b.tock <= n) continue;
-        if (b.cela ? sl === b.w : sl.startsWith(b.w) || (b.w.length >= 4 && brez[i].some((x) => x.startsWith(b.w)))) n = b.tock;
+        if (b.cela ? sl === b.w : sl.startsWith(b.w) || (sredi && b.w.length >= 5 && sl.includes(b.w)) || (b.w.length >= 4 && brez[i].some((x) => x.startsWith(b.w)))) n = b.tock;
       }
       return n;
     });

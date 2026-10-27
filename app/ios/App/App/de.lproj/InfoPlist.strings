@@ -1,0 +1,12 @@
+"CFBundleDisplayName" = "Fixko";
+"CFBundleName" = "Fixko";
+"NSMicrophoneUsageDescription" = "Fixko nimmt Ihre Stimme auf und wandelt sie in die Auftragsbeschreibung um. Die Aufnahme wird nicht gespeichert.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Fixko erkennt anhand des Standorts Ihren Ort, um den Auftrag an Handwerker in der Nähe zu senden. Der Standort wird nicht gespeichert.";
+"NSLocationAlwaysUsageDescription" = "Fixko erkennt anhand des Standorts Ihren Ort, um den Auftrag an Handwerker in der Nähe zu senden. Der Standort wird nicht gespeichert.";
+"NSLocationWhenInUseUsageDescription" = "Fixko erkennt anhand des Standorts Ihren Ort, um den Auftrag an Handwerker in der Nähe zu senden. Der Standort wird nicht gespeichert.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Fixko trägt den vereinbarten Termin in Kalender und Erinnerungen ein, damit Sie ihn nicht vergessen.";
+"NSCalendarsUsageDescription" = "Fixko trägt den vereinbarten Termin in Kalender und Erinnerungen ein, damit Sie ihn nicht vergessen.";
+"NSRemindersFullAccessUsageDescription" = "Fixko trägt den vereinbarten Termin in Kalender und Erinnerungen ein, damit Sie ihn nicht vergessen.";
+"NSRemindersUsageDescription" = "Fixko trägt den vereinbarten Termin in Kalender und Erinnerungen ein, damit Sie ihn nicht vergessen.";
+"NSCameraUsageDescription" = "Fixko nutzt die Kamera, damit Sie fotografieren können, was repariert werden muss.";
+"NSPhotoLibraryUsageDescription" = "Fixko braucht Zugriff auf Ihre Fotos, damit Sie dem Handwerker zeigen können, was zu reparieren ist.";

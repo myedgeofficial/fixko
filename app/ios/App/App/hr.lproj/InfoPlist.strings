@@ -1,0 +1,12 @@
+"CFBundleDisplayName" = "Fixko";
+"CFBundleName" = "Fixko";
+"NSMicrophoneUsageDescription" = "Fixko snima vaš glas kako bi ga prepisao u opis posla. Snimka se ne sprema.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Fixko iz lokacije prepoznaje vaše mjesto kako bi posao poslao majstorima u blizini. Lokacija se ne sprema.";
+"NSLocationAlwaysUsageDescription" = "Fixko iz lokacije prepoznaje vaše mjesto kako bi posao poslao majstorima u blizini. Lokacija se ne sprema.";
+"NSLocationWhenInUseUsageDescription" = "Fixko iz lokacije prepoznaje vaše mjesto kako bi posao poslao majstorima u blizini. Lokacija se ne sprema.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Fixko dodaje dogovoreni termin u kalendar i podsjetnike.";
+"NSCalendarsUsageDescription" = "Fixko dodaje dogovoreni termin u kalendar i podsjetnike.";
+"NSRemindersFullAccessUsageDescription" = "Fixko dodaje dogovoreni termin u kalendar i podsjetnike.";
+"NSRemindersUsageDescription" = "Fixko dodaje dogovoreni termin u kalendar i podsjetnike.";
+"NSCameraUsageDescription" = "Fixko koristi kameru da fotografirate što treba popraviti.";
+"NSPhotoLibraryUsageDescription" = "Fixko treba pristup slikama da majstoru pokažete što treba popraviti.";
