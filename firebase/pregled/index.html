@@ -36,6 +36,25 @@
     .nakazilo{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--bg)}
     .desno{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
     .err{color:var(--rdeca);margin:8px 0}
+    .stat{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+    .tile{background:var(--kartica);border:1px solid var(--rob);border-radius:14px;padding:12px 14px}
+    .tile .st{font-size:26px;font-weight:700;line-height:1.1}
+    .tile .op{font-size:13px;color:var(--siva)}
+    .graf{background:var(--kartica);border:1px solid var(--rob);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+    .zavihki{display:flex;gap:6px;margin:4px 0 14px}
+    .zavihki button{background:transparent;color:var(--tekst);border:1px solid var(--rob);font-size:16px}
+    .zavihki button.izbran{background:var(--zelena);color:#fff;border-color:var(--zelena)}
+    .d{background:var(--kartica);border:1px solid var(--rob);border-radius:14px;padding:12px;margin:8px 0;display:grid;grid-template-columns:24px 64px 1fr auto;gap:12px;align-items:center}
+    .d img{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--rob)}
+    .d input{width:20px;height:20px;margin:0}
+    .z-odprto{background:var(--zelena-bg);color:var(--zelena)}
+    .z-prevzeto,.z-opravljeno{background:var(--rob);color:var(--tekst)}
+    .z-preklicano{background:var(--rdeca-bg);color:var(--rdeca)}
+    @media (max-width:640px){.d{grid-template-columns:24px 48px 1fr}.d img{width:48px;height:48px}.d .desno{grid-column:1/-1}}
+    .stolpci{display:flex;align-items:flex-end;gap:2px;height:70px;margin-top:8px}
+    .stolpci div{flex:1;background:var(--zelena);border-radius:3px 3px 0 0;min-height:2px}
+    .stolpci div.prazen{background:var(--rob)}
+    .os{display:flex;justify-content:space-between;font-size:12px;color:var(--siva);margin-top:4px}
     @media (max-width:640px){.m{grid-template-columns:44px 1fr}.m img{width:44px;height:44px}.desno{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center}.filtri input{margin:6px 0 0;max-width:none}}
   </style>
 </head>
@@ -48,7 +67,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script>
-    // Vsi mojstri in potrditev podjetja (nakazilo 0,01 €). Dostop s kodo skrbnika (ista kot v aplikaciji in na moderaciji).
+    // Vsi mojstri in potrditev podjetja (nakazilo 0,01 €). Dostop: povezava v e-pošti (samo lastniški naslovi) ali koda skrbnika.
     firebase.initializeApp({ apiKey: "AIzaSyCi-g2V67UMyELMjG7fl0BxcqCuUaWRkx4", authDomain: "fixko-app.firebaseapp.com", projectId: "fixko-app", appId: "1:117276939392:web:9728005ec9450ac8c50265" });
     const klic = firebase.app().functions("europe-west1").httpsCallable("skrbnik");
     const el = document.getElementById("vsebina");
@@ -56,22 +75,48 @@
     const kdaj = (ms) => ms ? new Date(ms).toLocaleString("sl-SI", { dateStyle: "short", timeStyle: "short" }) : "–";
     const dan = (ms) => ms ? new Date(ms).toLocaleDateString("sl-SI") : "–";
     const STANJE = { potrjen: "Potrjen", caka: "Čaka na potrditev", zavrnjen: "Zavrnjen", ni: "Ni nakazal" };
-    let koda = "", podatki = null, filter = "caka", iskanje = "";
+    let koda = "", podatki = null, stat = null, filter = "caka", iskanje = "", pogled = "mojstri", dela = null, izbrana = new Set();
     try { koda = localStorage.getItem("skrbnik") || ""; filter = localStorage.getItem("pregled-filter") || "caka"; } catch (e) {}
 
-    function prijava(napaka) {
-      el.innerHTML = `<input id="koda" type="password" placeholder="Koda skrbnika" autocomplete="off">${napaka ? `<div class="err">${esc(napaka)}</div>` : ""}<div><button id="ok">Naprej</button></div>`;
-      const i = document.getElementById("koda");
-      const naprej = () => { koda = i.value.trim(); try { localStorage.setItem("skrbnik", koda); } catch (e) {} nalozi(); };
+    const auth = firebase.auth();
+    function prijava(napaka, sKodo) {
+      el.innerHTML = sKodo
+        ? `<input id="koda" type="password" placeholder="Koda skrbnika" autocomplete="off">${napaka ? `<div class="err">${esc(napaka)}</div>` : ""}<div><button id="ok">Naprej</button></div>`
+        : `<p>Vpiši svoj e-naslov. Poslali ti bomo povezavo za prijavo.</p>
+           <input id="mail" type="email" placeholder="ime@gmail.com" autocomplete="email">${napaka ? `<div class="err">${esc(napaka)}</div>` : ""}
+           <div><button id="ok">Pošlji povezavo</button></div><p><a href="#" id="zkodo" class="siva">Imam kodo skrbnika</a></p>`;
+      const i = el.querySelector("input");
+      const naprej = async () => {
+        if (sKodo) {
+          koda = i.value.trim(); try { localStorage.setItem("skrbnik", koda); } catch (e) {}
+          if (!auth.currentUser) await auth.signInAnonymously();
+          return nalozi();
+        }
+        const mail = i.value.trim().toLowerCase();
+        if (!mail.includes("@")) return prijava("Vpiši e-naslov.");
+        document.getElementById("ok").disabled = true;
+        try {
+          await auth.sendSignInLinkToEmail(mail, { url: location.origin + "/", handleCodeInApp: true });
+          try { localStorage.setItem("pregled-mail", mail); } catch (e) {}
+          el.innerHTML = `<p><b>Povezava je poslana na ${esc(mail)}.</b></p><p class="siva">Odpri e-pošto (poglej tudi v vsiljeno pošto) in klikni povezavo. Prijava velja na tej napravi, dokler se ne odjaviš.</p>`;
+        } catch (e) { prijava(e.message); }
+      };
       document.getElementById("ok").onclick = naprej;
       i.onkeydown = (e) => { if (e.key === "Enter") naprej(); };
+      const z = document.getElementById("zkodo");
+      if (z) z.onclick = (e) => { e.preventDefault(); prijava("", true); };
       i.focus();
     }
+    async function odjava(napaka) {
+      koda = ""; try { localStorage.removeItem("skrbnik"); } catch (x) {}
+      await auth.signOut().catch(() => {});
+      prijava(napaka);
+    }
     async function nalozi() {
-      if (!koda) return prijava();
+      klic({ koda, akcija: "statistika" }).then((r) => { stat = r.data; if (podatki) izrisi(); }).catch((e) => console.warn("statistika", e));
       try { podatki = (await klic({ koda, akcija: "vsi" })).data; }
       catch (e) {
-        if (e.code === "functions/permission-denied" || /koda/i.test(e.message)) { koda = ""; try { localStorage.removeItem("skrbnik"); } catch (x) {} return prijava(e.message); }
+        if (e.code === "functions/permission-denied" || e.code === "functions/unauthenticated") return odjava(auth.currentUser?.email ? `Naslov ${auth.currentUser.email} nima dostopa.` : e.message);
         el.innerHTML = `<div class="err">${esc(e.message)}</div>`; return;
       }
       izrisi();
@@ -105,7 +150,75 @@
       if (m.stanje === "zavrnjen") return `<div class="nakazilo siva">Zavrnjeno ${kdaj(m.cakaOd)} · sklic ${esc(m.sklic)}</div>`;
       return "";
     }
+    function stolpci(naDan, dni = 30) {
+      const dnevi = [...Array(dni)].map((_, i) => new Date(Date.now() - (dni - 1 - i) * 864e5).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" }));
+      const v = dnevi.map((d) => naDan[d] || 0), max = Math.max(1, ...v);
+      return `<div class="stolpci">${v.map((x, i) => `<div class="${x ? "" : "prazen"}" style="height:${Math.max(3, x / max * 100)}%" title="${dnevi[i]}: ${x}"></div>`).join("")}</div>
+        <div class="os"><span>${new Date(dnevi[0]).toLocaleDateString("sl-SI")}</span><span>danes</span></div>`;
+    }
+    function statistika() {
+      if (!stat) return `<p class="siva">Nalagam statistiko …</p>`;
+      const u = stat.uporabniki, d = stat.dela, po = d.po || {};
+      const t = (st, op) => `<div class="tile"><div class="st">${st}</div><div class="op">${op}</div></div>`;
+      return `<h2 style="font-size:16px;margin:4px 0 8px">Od objave v App Storu (${new Date(stat.objava).toLocaleDateString("sl-SI")})</h2>
+        <div class="stat">
+          ${t(u.odObjave, "novih računov (namestitev)")}${t(d.strankeOdObjave, "strank, ki so oddale delo")}${t(d.odObjave, "oddanih del")}${t(stat.mojstri.odObjave, "novih mojstrov")}
+        </div>
+        <h2 style="font-size:16px;margin:4px 0 8px">Vse skupaj <span class="siva" style="font-weight:400">(tudi testni računi iz TestFlighta)</span></h2>
+        <div class="stat">
+          ${t(u.skupaj, "računov")}${t(u.aktivni1, "aktivnih danes")}${t(u.aktivni7, "aktivnih v 7 dneh")}${t(d.stranke, "strank z delom")}
+          ${t(stat.mojstri.skupaj, "mojstrov")}${t(stat.mojstri.preverjeni, "potrjenih podjetij")}
+          ${t(d.skupaj, "oddanih del")}${t(po.odprto || 0, "odprtih del")}${t((po.prevzeto || 0) + (po.opravljeno || 0), "prevzetih ali opravljenih")}
+          ${t(stat.ponudbe, "ponudb mojstrov")}${t(stat.ocene, "ocen")}
+        </div>
+        <div class="stat" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+          <div class="graf"><b>Novi uporabniki</b> <span class="siva">· zadnjih 30 dni: ${u.novi30}</span>${stolpci(u.noviNaDan)}</div>
+          <div class="graf"><b>Oddana dela</b> <span class="siva">· zadnjih 30 dni: ${d.novi30}</span>${stolpci(d.naDan)}</div>
+        </div>`;
+    }
+    const zavihki = () => `<div class="zavihki"><button data-p="mojstri" class="${pogled === "mojstri" ? "izbran" : ""}">Mojstri</button><button data-p="dela" class="${pogled === "dela" ? "izbran" : ""}">Dela</button></div>`;
+    function skupno() {
+      el.querySelectorAll("[data-p]").forEach((b) => b.onclick = () => { pogled = b.dataset.p; izrisi(); });
+      document.getElementById("odjava").onclick = () => odjava();
+    }
+    async function naloziDela() {
+      try { dela = (await klic({ koda, akcija: "dela" })).data.dela; } catch (e) { alert(e.message); dela = []; }
+      izbrana = new Set([...izbrana].filter((id) => dela.some((d) => d.id === id)));
+      if (pogled === "dela") izrisi();
+    }
+    function izrisiDela() {
+      if (!dela) { el.innerHTML = `${statistika()}${zavihki()}<p class="siva">Nalagam dela …</p><p><button class="ghost" id="odjava">Odjava</button></p>`; skupno(); naloziDela(); return; }
+      const q = iskanje.toLowerCase();
+      const vidna = dela.filter((d) => !q || [d.opis, d.stroka, d.kraj, d.id].join(" ").toLowerCase().includes(q));
+      el.innerHTML = `${statistika()}${zavihki()}
+        <div class="filtri"><button class="rdec" id="brisiVec" ${izbrana.size ? "" : "disabled"}>Izbriši označena (${izbrana.size})</button>
+          <input id="isci" type="search" placeholder="Išči opis, kraj, stroko" value="${esc(iskanje)}"></div>
+        <p class="siva">Brisanje velja takoj (tudi v aplikaciji). Mojster, ki je delo prevzel, dobi obvestilo, da je preklicano.</p>
+        ${vidna.length ? vidna.map((d) => `<div class="d">
+          <input type="checkbox" data-id="${esc(d.id)}" ${izbrana.has(d.id) ? "checked" : ""}>
+          ${d.slika ? `<img src="${esc(d.slika)}" alt="" loading="lazy">` : `<img alt="">`}
+          <div><div class="ime"><b>${esc(d.opis || d.stroka)}</b> <span class="znacka z-${esc(d.status)}">${esc(d.status)}</span></div>
+            <div class="siva">${esc(d.stroka)} · ${esc(d.kraj)} · ${esc(d.kdaj)} · ${kdaj(d.ustvarjeno)}${d.slik ? ` · +${d.slik} slik` : ""} · obveščenih mojstrov: ${d.obvesceni}</div></div>
+          <div class="desno"><button class="rdec" data-brisi="${esc(d.id)}">Izbriši</button></div>
+        </div>`).join("") : `<p class="siva">Ni del.</p>`}
+        <p class="siva" style="margin-top:24px"><button class="ghost" id="odjava">Odjava</button></p>`;
+      skupno();
+      const isci = document.getElementById("isci");
+      isci.oninput = () => { iskanje = isci.value; const p = isci.selectionStart; izrisi(); const n = document.getElementById("isci"); n.focus(); n.setSelectionRange(p, p); };
+      el.querySelectorAll("input[data-id]").forEach((c) => c.onchange = () => { c.checked ? izbrana.add(c.dataset.id) : izbrana.delete(c.dataset.id); izrisi(); });
+      const brisi = async (ids, b) => {
+        if (!confirm(ids.length === 1 ? "Izbrišem to delo? Tega ni mogoče razveljaviti." : `Izbrišem ${ids.length} del? Tega ni mogoče razveljaviti.`)) return;
+        b.disabled = true;
+        try { await klic({ koda, akcija: "izbrisi-delo", ids }); ids.forEach((id) => izbrana.delete(id)); } catch (e) { alert(e.message); }
+        naloziDela();
+        klic({ koda, akcija: "statistika" }).then((r) => { stat = r.data; izrisi(); }).catch(() => {});
+      };
+      el.querySelectorAll("[data-brisi]").forEach((b) => b.onclick = () => brisi([b.dataset.brisi], b));
+      const bv = document.getElementById("brisiVec");
+      bv.onclick = () => brisi([...izbrana], bv);
+    }
     function izrisi() {
+      if (pogled === "dela") return izrisiDela();
       const vsi = podatki.mojstri;
       const st = { caka: 0, potrjen: 0, ni: 0, zavrnjen: 0 };
       vsi.forEach((m) => st[m.stanje]++);
@@ -113,7 +226,7 @@
       const vidni = vsi.filter((m) => (filter === "vsi" || (filter === "ni" ? m.stanje === "ni" || m.stanje === "zavrnjen" : m.stanje === filter))
         && (!q || [m.ime, m.firma, m.davcna, m.tel].join(" ").toLowerCase().includes(q)));
       const gumb = (k, t) => `<button data-f="${k}" class="${filter === k ? "izbran" : ""}">${t}</button>`;
-      el.innerHTML = `<div class="banka">${banka(podatki.banka)}</div>
+      el.innerHTML = `${statistika()}${zavihki()}<div class="banka">${banka(podatki.banka)}</div>
         <div class="filtri">${gumb("caka", `Čaka (${st.caka})`)}${gumb("potrjen", `Potrjeni (${st.potrjen})`)}${gumb("ni", `Niso nakazali (${st.ni + st.zavrnjen})`)}${gumb("vsi", `Vsi (${vsi.length})`)}
           <input id="isci" type="search" placeholder="Išči ime, podjetje, davčno" value="${esc(iskanje)}"></div>
         ${vidni.length ? vidni.map((m) => `<div class="m">
@@ -136,7 +249,7 @@
       el.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { filter = b.dataset.f; try { localStorage.setItem("pregled-filter", filter); } catch (e) {} izrisi(); });
       const isci = document.getElementById("isci");
       isci.oninput = () => { iskanje = isci.value; const p = isci.selectionStart; izrisi(); const n = document.getElementById("isci"); n.focus(); n.setSelectionRange(p, p); };
-      document.getElementById("odjava").onclick = () => { koda = ""; try { localStorage.removeItem("skrbnik"); } catch (e) {} prijava(); };
+      skupno();
       el.querySelectorAll("[data-a]").forEach((b) => b.onclick = async () => {
         const a = b.dataset.a;
         if (a === "potrdi" && !confirm(`Potrdim podjetje »${b.dataset.ime}«? Mojster dobi obvestilo in se lahko javlja na dela.`)) return;
@@ -149,7 +262,18 @@
         nalozi();
       });
     }
-    firebase.auth().signInAnonymously().then(nalozi).catch((e) => { el.innerHTML = `<div class="err">${esc(e.message)}</div>`; });
+    (async () => {
+      if (auth.isSignInWithEmailLink(location.href)) {
+        let mail = ""; try { mail = localStorage.getItem("pregled-mail") || ""; } catch (e) {}
+        if (!mail) mail = prompt("Potrdi svoj e-naslov") || "";
+        try { await auth.signInWithEmailLink(mail.trim(), location.href); } catch (e) { history.replaceState(null, "", "/"); return prijava(e.message); }
+        history.replaceState(null, "", "/");
+      }
+      const u = await new Promise((ok) => { const s = auth.onAuthStateChanged((x) => { s(); ok(x); }); });
+      if (u && u.email) return nalozi();
+      if (koda) { if (!u) await auth.signInAnonymously(); return nalozi(); }
+      prijava();
+    })().catch((e) => { el.innerHTML = `<div class="err">${esc(e.message)}</div>`; });
   </script>
 </body>
 </html>
