@@ -359,6 +359,21 @@ exports.odpovej = onCall(async (req) => {
 });
 
 // Stranka izbriše naročilo (eno ali več) v katerem koli stanju. Mojster, ki je prišel, dobi obvestilo.
+// Izbriše delo s ponudbami, kontaktom in slikami; mojstra, ki ga je prevzel, obvesti.
+async function pobrisiDelo(dRef, dd) {
+  const id = dRef.id;
+  if (dd.status === "prevzeto" && dd.mojster) {
+    const m = await db.doc("mojstri/" + dd.mojster).get();
+    if (m.exists && m.data().push) await sendApns([m.data().push], "Stranka je preklicala naročilo", (dd.opis || strokaIme(dd.stroka)) + ", " + dd.kraj + ". Ne hodite tja.", { vloga: "M", delo: id }).catch(() => {});
+  }
+  const pon = await db.collection("ponudbe").where("delo", "==", id).get();
+  const batch = db.batch();
+  pon.docs.forEach((x) => batch.delete(x.ref));
+  batch.delete(dRef.collection("zasebno").doc("kontakt"));
+  batch.delete(dRef);
+  await batch.commit();
+  await admin.storage().bucket().deleteFiles({ prefix: "slike/" + dd.lastnik + "/" + id }).catch((e) => console.warn("slike", e.message));
+}
 exports.izbrisiDelo = onCall(async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
@@ -370,17 +385,7 @@ exports.izbrisiDelo = onCall(async (req) => {
     if (!d.exists) continue;
     const dd = d.data();
     if (dd.lastnik !== uid) throw new HttpsError("permission-denied", "To ni vaše naročilo.");
-    if (dd.status === "prevzeto" && dd.mojster) {
-      const m = await db.doc("mojstri/" + dd.mojster).get();
-      if (m.exists && m.data().push) await sendApns([m.data().push], "Stranka je preklicala naročilo", (dd.opis || strokaIme(dd.stroka)) + ", " + dd.kraj + ". Ne hodite tja.", { vloga: "M", delo: id }).catch(() => {});
-    }
-    const pon = await db.collection("ponudbe").where("delo", "==", id).get();
-    const batch = db.batch();
-    pon.docs.forEach((x) => batch.delete(x.ref));
-    batch.delete(dRef.collection("zasebno").doc("kontakt"));
-    batch.delete(dRef);
-    await batch.commit();
-    await admin.storage().bucket().deleteFiles({ prefix: "slike/" + uid + "/" + id }).catch((e) => console.warn("slike", e.message));
+    await pobrisiDelo(dRef, dd);
   }
   return { ok: true };
 });
@@ -688,6 +693,23 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
     return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0 }; }) };
   }
   if (akcija === "statistika") return require("./statistika").zberi();
+  // Vsa dela (zadnjih 300) in brisanje kateregakoli dela, za stran pregled.
+  if (akcija === "dela") {
+    const ms = (t) => t?.toMillis?.() || 0;
+    const q = await db.collection("dela").orderBy("ustvarjeno", "desc").limit(300).get();
+    return { dela: q.docs.map((d) => { const j = d.data(); return {
+      id: d.id, opis: j.opis || "", stroka: strokaIme(j.stroka), kraj: j.kraj || "", regija: j.regija || "", kdaj: j.kdaj || "", status: j.status || "odprto",
+      ustvarjeno: ms(j.ustvarjeno), slika: j.slika || "", slik: (j.slike || []).length, obvesceni: j.obvesceni || 0, mojster: !!j.mojster, lastnik: j.lastnik || ""
+    }; }) };
+  }
+  if (akcija === "izbrisi-delo") {
+    const ids = (Array.isArray(req.data?.ids) ? req.data.ids : [req.data?.id]).map((x) => String(x || "")).filter(Boolean).slice(0, 100);
+    for (const id of ids) {
+      const dRef = db.doc("dela/" + id), d = await dRef.get();
+      if (d.exists) await pobrisiDelo(dRef, d.data());
+    }
+    return { ok: true, izbrisanih: ids.length };
+  }
   // Vsi mojstri za stran pregled (popravko.pregled.nakupko.com).
   if (akcija === "vsi") {
     const ms = (t) => t?.toMillis?.() || 0;
@@ -728,7 +750,8 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
 });
 
 /* ---------- brisanje podatkov ---------- */
-exports.izbrisi = onCall(async (req) => {
+// Javno klicljiva (aplikacija); brez tega je Cloud Run zavrnil klic in brisanje računa ni delovalo.
+exports.izbrisi = onCall({ invoker: "public" }, async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
   const dela = await db.collection("dela").where("lastnik", "==", uid).get();
