@@ -88,16 +88,17 @@ async function preglej(potrdi) {
     for (const k of kandidati) {
       const d = poSklicu.get(k.sklic);
       obdelani.add(k.id);
-      if (!d) { rezultat.push({ sklic: k.sklic, izid: "ni mojstra" }); continue; }
-      const m = d.data(), placnik = k.t.debtor?.name || "";
-      if (m.preverjeno && m.preverjeno.davcna === (m.davcna || "")) { rezultat.push({ sklic: k.sklic, izid: "že potrjen" }); continue; }
+      const placnik = k.t.debtor?.name || "", iban = k.t.debtor_account?.iban || "";
+      if (!d) { rezultat.push({ sklic: k.sklic, izid: "ni mojstra", placnik, iban }); continue; }
+      const m = d.data(), o = { sklic: k.sklic, placnik, iban, uid: d.id, firma: m.firma || "", davcna: m.davcna || "" };
+      if (m.preverjeno && m.preverjeno.davcna === (m.davcna || "")) { rezultat.push({ ...o, izid: "že potrjen" }); continue; }
       if (ujema(placnik, m.firma)) {
-        await potrdi(d.ref, m, { samodejno: true, placnik, iban: k.t.debtor_account?.iban || "" });
-        rezultat.push({ sklic: k.sklic, izid: "potrjen" });
+        await potrdi(d.ref, m, { samodejno: true, placnik, iban });
+        rezultat.push({ ...o, izid: "potrjen" });
       } else {
         // Ime se ne ujema: ostane skrbniku, ki vidi ime plačnika.
-        await d.ref.update({ preverjanje: { cakam: true, sklic: k.sklic, davcna: m.davcna || "", placnik, iban: k.t.debtor_account?.iban || "", ob: FieldValue.serverTimestamp() } });
-        rezultat.push({ sklic: k.sklic, izid: "ročno" });
+        await d.ref.update({ preverjanje: { cakam: true, sklic: k.sklic, davcna: m.davcna || "", placnik, iban, ob: FieldValue.serverTimestamp() } });
+        rezultat.push({ ...o, izid: "ročno" });
       }
     }
   }

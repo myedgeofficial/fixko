@@ -1,6 +1,6 @@
 name: Strežnik (Firebase)
 
-# Objavi pravila baze in shrambe slik, indekse in funkcije (obvestila mojstrom, prevzem, naročnina, brisanje).
+# Objavi pravila baze in shrambe slik, indekse, funkcije (obvestila mojstrom, prevzem, naročnina, brisanje) in zasebno stran mojstrov.
 # Potrebne skrivnosti: FIREBASE_SERVICE_ACCOUNT (JSON), APNS_KEY_P8, APNS_KEY_ID, APPLE_TEAM_ID.
 # Spremenljivki: FIREBASE_PROJECT (privzeto fixko-app), FIXKO_PREIZKUS (1 = brezplačen preizkus za mojstre, dokler naročnina v App Store ni odprta).
 on:
@@ -56,5 +56,8 @@ jobs:
           # Spletna aplikacija (njene nastavitve uporabi iOS gradnja) in baza v EU, če še ne obstajata.
           if ! $FB apps:list WEB --json | grep -q '"appId"'; then $FB apps:create WEB "Fixko"; fi
           $FB firestore:databases:list --json | grep -q '(default)' || $FB firestore:databases:create "(default)" --location eur3 || true
-          $FB deploy --only firestore,storage,functions --force
+          # Zasebna stran mojstrov (popravko.pregled.nakupko.com): stran na Hostingu in lastna domena.
+          $FB hosting:sites:list --json | grep -q '"popravko-pregled"' || $FB hosting:sites:create popravko-pregled || true
+          $FB deploy --only firestore,storage,functions,hosting:popravko-pregled --force
+          NODE_PATH=functions/node_modules node domena.js "$FIREBASE_PROJECT" popravko-pregled popravko.pregled.nakupko.com
           rm -f "$RUNNER_TEMP/sa.json" functions/.env
