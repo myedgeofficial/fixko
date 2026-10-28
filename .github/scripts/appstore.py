@@ -37,6 +37,16 @@ def poslji(metoda, pot, data):
     return r.json() if ok and r.text else {}
 
 
+# Nova aplikacija (Fixko): registriraj bundle ID z obvestili; aplikacijo v App Store Connect potem ustvari človek.
+if AKCIJA == "bundle":
+    obst = [x for x in get("/bundleIds", **{"filter[identifier]": os.environ["BUNDLE_ID"]})["data"] if x["attributes"]["identifier"] == os.environ["BUNDLE_ID"]]
+    bid = obst[0]["id"] if obst else poslji("POST", "/bundleIds", {"type": "bundleIds", "attributes": {"identifier": os.environ["BUNDLE_ID"], "name": os.environ.get("IME", "Fixko"), "platform": "IOS"}}).get("data", {}).get("id")
+    print("BUNDLE", os.environ["BUNDLE_ID"], bid)
+    if bid and "PUSH_NOTIFICATIONS" not in [c["attributes"]["capabilityType"] for c in get(f"/bundleIds/{bid}/bundleIdCapabilities")["data"]]:
+        poslji("POST", "/bundleIdCapabilities", {"type": "bundleIdCapabilities", "attributes": {"capabilityType": "PUSH_NOTIFICATIONS"}, "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bid}}}})
+    print("APPS", [a["attributes"]["name"] for a in get("/apps", **{"filter[bundleId]": os.environ["BUNDLE_ID"]})["data"]])
+    sys.exit(1 if napaka else 0)
+
 app = get("/apps", **{"filter[bundleId]": os.environ["BUNDLE_ID"]})["data"][0]
 AID = app["id"]
 print("APP", json.dumps(app["attributes"], ensure_ascii=False))
