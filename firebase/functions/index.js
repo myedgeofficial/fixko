@@ -125,7 +125,7 @@ exports.novoDelo = onDocumentCreated({ document: "dela/{id}", secrets: ["MAIL_PA
 const PRIJAV_ZA_SKRITJE = 2; // toliko različnih mojstrov mora prijaviti objavo, da se skrije vsem
 const OPOZORIL_ZA_BLOKADO = 2; // po toliko zavrnjenih slikah uporabnik ne more več oddajati del
 const MODERACIJA_URL = "https://fixko-app.web.app/moderacija";
-const PREGLED_URL = "https://popravko.pregled.nakupko.com";
+const PREGLED_URL = "https://stats.remako.si"; // zavihek Popravko (prej popravko.pregled.nakupko.com)
 
 async function obvestiStranko(id, naslov, besedilo, pritozba = "") {
   const k = await db.doc("dela/" + id + "/zasebno/kontakt").get();
@@ -724,7 +724,7 @@ async function pushSkrbniku(naslov, besedilo, pot = "/") {
 // Mojster čaka na potrditev: obvestilo na telefon skrbnika (in e-pošta, ki pride vedno).
 async function obvestiOMojstru(uid, m, dogodek, nakazilo) {
   const kje = [(m.stroke || []).map(strokaIme).join(", "), (m.regije || []).join(", ")].filter(Boolean).join(" · ");
-  await pushSkrbniku(dogodek + ": " + (m.firma || m.ime || "mojster"), [m.ime, kje, "0,01 €: " + nakazilo].filter(Boolean).join("\n"), "/?m=" + encodeURIComponent(uid))
+  await pushSkrbniku(dogodek + ": " + (m.firma || m.ime || "mojster"), [m.ime, kje, "0,01 €: " + nakazilo].filter(Boolean).join("\n"), "/?popravko=" + encodeURIComponent(uid))
     .catch((e) => console.warn("pushSkrbniku", e.message));
 }
 
@@ -792,10 +792,10 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
 });
 
 // Popravko na stats.remako.si (repozitorij remako-trezor): ista dejanja kot zgoraj, prijava z Google računom projekta byurska-studio
-// (Teo še s kodo 2FA, enako kot stats.remako.si). Obvestila in naprave ostanejo samo na popravko.pregled.nakupko.com.
+// (Teo še s kodo 2FA, enako kot stats.remako.si), tudi obvestila na telefon.
 const STATS_IZVORI = ["https://stats.remako.si", "https://remako-stats.web.app", "https://remako-stats.firebaseapp.com"];
 const STATS_SKRBNIKI = { "teo.simonic7@gmail.com": true, "urska.repusic@gmail.com": false, "repusicurska@gmail.com": false };
-const STATS_DEJANJA = new Set(["vsi", "statistika", "dela", "izbrisi-delo", "izbrisi-mojstra", "potrdi", "zavrni", "banka-stanje", "banka-povezi", "banka-preglej"]);
+const STATS_DEJANJA = new Set(["vsi", "statistika", "dela", "izbrisi-delo", "izbrisi-mojstra", "potrdi", "zavrni", "banka-stanje", "banka-povezi", "banka-preglej", "push-kljuc", "push-naroci", "push-test"]);
 const studio = () => admin.apps.find((a) => a.name === "studio") || admin.initializeApp({ projectId: "byurska-studio" }, "studio");
 exports.pregledStats = onRequest({ cors: STATS_IZVORI, secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeconds: 120 }, async (req, res) => {
   try {
