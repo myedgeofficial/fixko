@@ -18,11 +18,14 @@ const ms = (t) => (t && t.toMillis ? t.toMillis() : 0);
 async function zberi() {
   const db = admin.firestore(), now = Date.now();
   const u = { skupaj: 0, novi7: 0, novi30: 0, aktivni1: 0, aktivni7: 0, aktivni30: 0, noviNaDan: {}, aktivniNaDan: {}, odObjave: 0 };
+  const nastali = new Map();
   let token;
   do {
     const r = await admin.auth().listUsers(1000, token);
     for (const x of r.users) {
+      if (x.email) continue; // skrbniki (prijava z e-pošto na strani pregled) niso uporabniki aplikacije
       const nastal = Date.parse(x.metadata.creationTime) || 0;
+      nastali.set(x.uid, nastal);
       const zadnjic = Date.parse(x.metadata.lastRefreshTime || x.metadata.lastSignInTime || x.metadata.creationTime) || 0;
       u.skupaj++;
       if (nastal >= OBJAVA) u.odObjave++;
@@ -53,6 +56,10 @@ async function zberi() {
     const t = ms(x.get("ustvarjeno"));
     if (t && now - t < 30 * DAN) { d.novi30++; const k = ljDan(t); d.naDan[k] = (d.naDan[k] || 0) + 1; }
   });
+  // Ljudje, ki so v aplikaciji kaj naredili (oddali delo ali izpolnili profil mojstra); anonimni računi brez dejanj (odprtja, ponovne namestitve, testi) ne štejejo.
+  const ljudje = new Set([...stranke, ...mojstri.docs.map((x) => x.id)].filter(Boolean));
+  u.ljudje = ljudje.size;
+  u.ljudjeOdObjave = [...ljudje].filter((id) => (nastali.get(id) || 0) >= OBJAVA).length;
   d.stranke = stranke.size; d.strankeOdObjave = strankeOdObjave.size;
   return { uporabniki: u, mojstri: m, dela: d, objava: OBJAVA, ponudbe: ponudbe.data().count, ocene: ocene.data().count, cas: now };
 }

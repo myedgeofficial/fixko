@@ -187,11 +187,11 @@
       const t = (st, op) => `<div class="tile"><div class="st">${st}</div><div class="op">${op}</div></div>`;
       return `<h2 style="font-size:16px;margin:4px 0 8px">Od objave v App Storu (${new Date(stat.objava).toLocaleDateString("sl-SI")})</h2>
         <div class="stat">
-          ${t(u.odObjave, "novih računov (namestitev)")}${t(d.strankeOdObjave, "strank, ki so oddale delo")}${t(d.odObjave, "oddanih del")}${t(stat.mojstri.odObjave, "novih mojstrov")}
+          ${t(u.ljudjeOdObjave ?? "–", "novih ljudi (oddali delo ali so mojstri)")}${t(d.strankeOdObjave, "strank, ki so oddale delo")}${t(d.odObjave, "oddanih del")}${t(stat.mojstri.odObjave, "novih mojstrov")}
         </div>
         <h2 style="font-size:16px;margin:4px 0 8px">Vse skupaj <span class="siva" style="font-weight:400">(tudi testni računi iz TestFlighta)</span></h2>
         <div class="stat">
-          ${t(u.skupaj, "računov")}${t(u.aktivni1, "aktivnih danes")}${t(u.aktivni7, "aktivnih v 7 dneh")}${t(d.stranke, "strank z delom")}
+          ${t(u.ljudje ?? "–", "ljudi (oddali delo ali so mojstri)")}${t(u.skupaj, "odprtij aplikacije (anonimni računi)")}${t(u.aktivni1, "aktivnih danes")}${t(u.aktivni7, "aktivnih v 7 dneh")}${t(d.stranke, "strank z delom")}
           ${t(stat.mojstri.skupaj, "mojstrov")}${t(stat.mojstri.preverjeni, "potrjenih podjetij")}
           ${t(d.skupaj, "oddanih del")}${t(po.odprto || 0, "odprtih del")}${t((po.prevzeto || 0) + (po.opravljeno || 0), "prevzetih ali opravljenih")}
           ${t(stat.ponudbe, "ponudb mojstrov")}${t(stat.ocene, "ocen")}
