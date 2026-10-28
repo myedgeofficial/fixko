@@ -77,7 +77,7 @@ jobs:
           FB="npx --yes firebase-tools@14 --project $FIREBASE_PROJECT --non-interactive"
           ID=$($FB apps:list ANDROID --json | python3 -c "import json,sys; print(next((a['appId'] for a in json.load(sys.stdin)['result'] if a.get('packageName')=='com.remako.fixko'),''))") || ID=""
           [ -n "$ID" ] || ID=$($FB apps:create ANDROID Fixko --package-name com.remako.fixko --json | python3 -c "import json,sys; print(json.load(sys.stdin)['result']['appId'])") || ID=""
-          if [ -n "$ID" ]; then $FB apps:sdkconfig ANDROID "$ID" --out android/app/google-services.json || : > android/app/google-services.json; fi
+          if [ -n "$ID" ]; then rm -f android/app/google-services.json; $FB apps:sdkconfig ANDROID "$ID" --out android/app/google-services.json || : > android/app/google-services.json; fi
           rm -f "$RUNNER_TEMP/sa.json"
           [ -s android/app/google-services.json ] && echo "Fixko: obvestila vklopljena" || echo "::warning::Fixko brez obvestil (google-services.json)."
 
