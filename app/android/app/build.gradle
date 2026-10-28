@@ -4,7 +4,8 @@ android {
     namespace = "si.fixko.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "si.fixko.app"
+        // Popravko: si.fixko.app, Fixko (tujina): FIXKO_APP_ID=com.remako.fixko
+        applicationId System.getenv("FIXKO_APP_ID") ?: "si.fixko.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(System.getenv("FIXKO_VERSION_CODE") ?: "1")

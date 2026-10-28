@@ -197,7 +197,7 @@ if AKCIJA == "drzave":
         print("DRZAV", len(vse), "vklopljenih na novo", sum(1 for t in vse if not t["attributes"].get("available")))
 
 if AKCIJA == "slike":
-    mapa = os.path.join(os.path.dirname(__file__), "../../appstore/slike")
+    mapa = os.path.join(os.path.dirname(__file__), "../../appstore/" + ("fixko/slike" if os.environ.get("APLIKACIJA") == "fixko" else "slike"))
     datoteke = sorted(glob.glob(mapa + "/*.png"))
     for l in get(f"/appStoreVersions/{ver['id']}/appStoreVersionLocalizations")["data"]:
         sets = get(f"/appStoreVersionLocalizations/{l['id']}/appScreenshotSets")["data"]

@@ -78,6 +78,9 @@ function prevediStran() {
   document.getElementById("tabM").textContent = t("Sem mojster");
   const f = document.querySelector(".foot a"); f.textContent = t("Zasebnost in pogoji"); f.href = stran("zasebnost.html");
 }
+// Okvirni zneski: v državah brez evra pokažemo domačo valuto (£, $), številke ostanejo.
+const VALUTA = { GB: "£", US: "$", CA: "$", AU: "$", NZ: "$" };
+const znesek = (s) => (VALUTA[prefs.drzava] ? t(s).replace(/€/g, VALUTA[prefs.drzava]) : t(s));
 function savePrefs() { Preferences.set({ key: "fixko", value: JSON.stringify(prefs) }).catch(() => {}); }
 
 /* ---------- Firebase ---------- */
@@ -237,7 +240,7 @@ function renderN() {
   const nazaj = k > 1 || aktivna.length;
   const vrh = `<div class="wiz">${nazaj ? `<button class="link" type="button" id="nazaj">‹ ${t("Nazaj")}</button>` : "<span></span>"}<div class="pike" aria-label="${t("Korak {0} od {1}", k, KORAKOV)}">${Array.from({ length: KORAKOV }, (_, i) => `<i class="${i < k ? "da" : ""}"></i>`).join("")}</div></div>`;
   const naprej = (tx = t("Naprej")) => `<div class="err" id="err" hidden></div><button class="btn big" type="button" id="naprej">${tx}</button>`;
-  const chipi = (id, list, sel) => `<div class="mreza ena" id="${id}">${list.map((v) => `<button type="button" class="chip velik" data-v="${v}" aria-pressed="${sel === v}">${t(v)}</button>`).join("")}</div>`;
+  const chipi = (id, list, sel) => `<div class="mreza ena" id="${id}">${list.map((v) => `<button type="button" class="chip velik" data-v="${v}" aria-pressed="${sel === v}">${id === "budget" ? znesek(v) : t(v)}</button>`).join("")}</div>`;
   let html;
   if (k === 1) html = `<h1>${t("Kaj je treba popraviti?")}</h1>
     <label class="shot${draft.photo ? " ima" : ""}" for="file">${draft.photo ? `<img src="${draft.photo}" alt="${t("Vaša slika")}"><span class="zamenjaj">${t("Zamenjaj sliko")}</span>` : `${ikona("kamera", 46, 1.6)}<b>${t("Fotografirajte")}</b><small>${t("ali izberite sliko iz telefona")}</small>`}</label>
@@ -256,7 +259,7 @@ function renderN() {
   }
   else html = `<h1>${t("Kam naj vas mojster pokliče?")}</h1>
     <input id="tel" type="tel" inputmode="tel" maxlength="20" placeholder="${telPrimer()}" value="${esc(prefs.tel)}" autocomplete="tel" aria-label="${t("Vaša telefonska številka")}">
-    <div class="povzetek">${draft.photo ? `<img src="${draft.photo}" alt="">` : `<span>${ikona(draft.cat, 30)}</span>`}<div><b>${esc(draft.opis || strokaIme(draft.cat))}</b><small>${esc([kdo(draft.cat), prefs.kraj, t(draft.kdaj), kvadratura(), draft.budget && draft.budget !== "Ne vem" ? t(draft.budget) : ""].filter(Boolean).join(" · "))}</small></div></div>
+    <div class="povzetek">${draft.photo ? `<img src="${draft.photo}" alt="">` : `<span>${ikona(draft.cat, 30)}</span>`}<div><b>${esc(draft.opis || strokaIme(draft.cat))}</b><small>${esc([kdo(draft.cat), prefs.kraj, t(draft.kdaj), kvadratura(), draft.budget && draft.budget !== "Ne vem" ? znesek(draft.budget) : ""].filter(Boolean).join(" · "))}</small></div></div>
     ${naprej(t("Pošlji mojstrom"))}
     <p class="note">${t("Za vas je {0} brezplačen. S pošiljanjem sprejemate", IME())} <a class="link" href="${stran("pogoji.html")}">${t("pogoje uporabe")}</a> ${t("in")} <a class="link" href="${stran("zasebnost.html")}">${t("politiko zasebnosti")}</a>.</p>`;
   view.innerHTML = vrh + html;
@@ -578,7 +581,7 @@ function postM(j) {
     <div class="pa">${moja ? `<button class="btn small ghost" type="button" data-take="${j.id}">${ikona("kljukica", 18, 2.6)} ${t("Javil si se")}</button>` : `<button class="btn small" type="button" data-take="${j.id}">${t("Javi se")}</button>`}
       ${j.prosnja ? "" : `<button class="ikb" type="button" data-slike="${j.id}" aria-label="${t("Prosi za več slik")}">${ikona("kamera", 24)}</button>`}</div>
     ${j.slika ? `<p class="po" data-odpri="M:${j.id}">${esc(j.opis || strokaIme(j.stroka))}</p>` : ""}
-    <div class="meta pm">${esc([t(j.kdaj), j.m2 ? `~${j.m2} m²` : "", j.budget && j.budget !== "Ne vem" ? t(j.budget) : ""].filter(Boolean).join(" · "))}${ocenaZnak(j.lastnik, " · " + t("Stranka"))}</div>
+    <div class="meta pm">${esc([t(j.kdaj), j.m2 ? `~${j.m2} m²` : "", j.budget && j.budget !== "Ne vem" ? znesek(j.budget) : ""].filter(Boolean).join(" · "))}${ocenaZnak(j.lastnik, " · " + t("Stranka"))}</div>
   </article>`;
 }
 // Podrobnosti prostega dela.
@@ -589,7 +592,7 @@ function detM(j) {
     <div class="pogoj"><span>${t("Kdaj")}</span><b>${esc([j.kdaj, ...(j.doma || [])].filter(Boolean).map((x) => t(x)).join(", "))}</b></div>
     ${ocenaZnak(j.lastnik) ? `<div class="pogoj"><span>${t("Stranka")}</span><b>${ocenaZnak(j.lastnik)}</b></div>` : ""}
     ${j.m2 ? `<div class="pogoj"><span>${t("Površina")}</span><b>${t("približno {0} m²", j.m2)}</b></div>` : ""}
-    ${j.budget ? `<div class="pogoj"><span>${t("Okvirno plačilo")}</span><b>${esc(t(j.budget))}</b></div>` : ""}
+    ${j.budget ? `<div class="pogoj"><span>${t("Okvirno plačilo")}</span><b>${esc(znesek(j.budget))}</b></div>` : ""}
     ${j.ponudb ? `<div class="meta">${t("Javili so se že {0}", mojstrovRod(j.ponudb))}</div>` : ""}
     ${moja?.status === "caka" ? `<div class="status"><span class="dot"></span>${t("Javil si se za {0}. Čakaš na stranko.", esc(opisTermina(moja.termin)))}</div><button class="btn ghost" type="button" data-take="${j.id}">${t("Spremeni termin ali ceno")}</button>`
       : `<button class="btn" type="button" data-take="${j.id}">${t("Javi se za to delo")}</button>`}

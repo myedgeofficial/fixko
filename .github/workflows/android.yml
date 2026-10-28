@@ -1,6 +1,6 @@
 name: Android aplikacija
 
-# Zgradi podpisan Fixko.apk in ga objavi kot izdajo "android":
+# Zgradi podpisan Fixko.apk (test) in Popravko.aab ter Fixko-play.aab za Google Play in ju objavi v izdaji "android":
 # https://github.com/myedgeofficial/fixko/releases/download/android/Fixko.apk
 # PR: samo preveri, da se zgradi.
 on:
@@ -19,6 +19,10 @@ permissions:
 
 jobs:
   android:
+    strategy:
+      fail-fast: false
+      matrix:
+        izdaja: [popravko, fixko]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -28,6 +32,8 @@ jobs:
     env:
       FIREBASE_PROJECT: ${{ vars.FIREBASE_PROJECT || 'fixko-app' }}
       FIXKO_VERSION_CODE: ${{ github.run_number }}
+      FIXKO_IZDAJA: ${{ matrix.izdaja }}
+      FIXKO_APP_ID: ${{ matrix.izdaja == 'fixko' && 'com.remako.fixko' || 'si.fixko.app' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +49,7 @@ jobs:
           cache-dependency-path: app/package-lock.json
 
       - name: Preizkusi pomožne funkcije (termini, telefon)
+        if: matrix.izdaja == 'popravko'
         working-directory: web
         run: node --test tests/*.test.js
 
@@ -56,6 +63,23 @@ jobs:
           CFG=$(npx --yes firebase-tools@14 --project "$FIREBASE_PROJECT" --non-interactive apps:sdkconfig WEB --json | python3 scripts/fb-config.py)
           echo "FIXKO_FB_CONFIG=$CFG" >> "$GITHUB_ENV"
           rm -f "$RUNNER_TEMP/sa.json"
+
+      - name: "Fixko: obvestila (google-services.json za com.remako.fixko)"
+        if: matrix.izdaja == 'fixko'
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          # Brez nastavitev za Fixko paket se ne zgradi (google-services), zato jih poiščemo ali ustvarimo; če ne gre, Fixko na Androidu nima obvestil.
+          : > android/app/google-services.json
+          if [ -z "$SA" ]; then echo "::warning::Ni FIREBASE_SERVICE_ACCOUNT, Fixko brez obvestil."; exit 0; fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          FB="npx --yes firebase-tools@14 --project $FIREBASE_PROJECT --non-interactive"
+          ID=$($FB apps:list ANDROID --json | python3 -c "import json,sys; print(next((a['appId'] for a in json.load(sys.stdin)['result'] if a.get('packageName')=='com.remako.fixko'),''))") || ID=""
+          [ -n "$ID" ] || ID=$($FB apps:create ANDROID Fixko --package-name com.remako.fixko --json | python3 -c "import json,sys; print(json.load(sys.stdin)['result']['appId'])") || ID=""
+          if [ -n "$ID" ]; then $FB apps:sdkconfig ANDROID "$ID" --out android/app/google-services.json || : > android/app/google-services.json; fi
+          rm -f "$RUNNER_TEMP/sa.json"
+          [ -s android/app/google-services.json ] && echo "Fixko: obvestila vklopljena" || echo "::warning::Fixko brez obvestil (google-services.json)."
 
       - name: Ključ za podpis
         env:
@@ -74,6 +98,7 @@ jobs:
           npx cap sync android
 
       - name: Zgradi APK
+        if: matrix.izdaja == 'popravko'
         working-directory: app/android
         run: |
           ./gradlew --no-daemon assembleRelease
@@ -83,13 +108,27 @@ jobs:
           ./gradlew --no-daemon bundleRelease
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/Popravko.aab"
 
+      - name: Zgradi Fixko za Google Play (AAB)
+        if: matrix.izdaja == 'fixko'
+        working-directory: app/android
+        run: |
+          ./gradlew --no-daemon bundleRelease
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/Fixko-play.aab"
+
+      - name: Objavi Fixko-play.aab
+        if: matrix.izdaja == 'fixko' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload android "$RUNNER_TEMP/Fixko-play.aab" --clobber
+
       - uses: actions/upload-artifact@v4
+        if: matrix.izdaja == 'popravko'
         with:
           name: Fixko-apk
           path: ${{ runner.temp }}/Fixko.apk
 
       - name: Objavi povezavo za prenos
-        if: github.event_name != 'pull_request'
+        if: matrix.izdaja == 'popravko' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
