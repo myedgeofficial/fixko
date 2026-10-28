@@ -14,7 +14,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } 
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
 import { STROKE, REGIJE, KDAJ, BUDGET, strokaIme, regijaIme, regijeDrzave, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, veljavnaTuja, cistaTuja, testnaFirma, POGOJI_VERZIJA, BREZPLACNO, sklicIz, jePreverjen, imaPovrsino, m2Iz } from "./data.js";
 import { t, mn, jz, jeSl, nastaviJezik, jezikNaprave, imeAplikacije, imeDrzave, decimalka, JEZIKI, IMENA_JEZIKOV } from "./i18n.js";
-import { DRZAVE, TUJE_REGIJE, EVRO, EU, vsaKljuc, jeVsa, pokriva, drzavaRegije, zaznajDrzavo } from "./drzave.js";
+import { DRZAVE, TUJE_REGIJE, EVRO, EU, vsaKljuc, jeVsa, pokriva, drzavaRegije, zaznajDrzavo, jezikDrzave } from "./drzave.js";
 import QRCode from "qrcode";
 import { prepoznajStroko, krajIzLokacije, regijaIzKraja } from "./pomoc.js";
 import { ikona } from "./ikone.js";
@@ -53,11 +53,12 @@ async function loadPrefs() {
   try { const { value } = await Preferences.get({ key: "fixko" }); Object.assign(prefs, JSON.parse(value || "{}")); } catch (e) {}
   // Jezik iz naprave (ali izbran v nastavitvah). Država: obstoječi uporabniki so iz Slovenije, novi iz časovnega pasu in jezika.
   const jeziki = navigator.languages?.length ? navigator.languages : [navigator.language || "sl"];
-  nastaviJezik(prefs.jezik || jezikNaprave(jeziki));
   if (!prefs.drzava) {
     prefs.drzava = prefs.uvod || prefs.regija || prefs.kraj ? "SI" : zaznajDrzavo(jeziki, Intl.DateTimeFormat().resolvedOptions().timeZone || "");
     savePrefs();
   }
+  // Jezik po državi uporabnika (v Sloveniji slovensko, tudi na angleškem iPhonu); kjer država nima našega jezika, jezik telefona.
+  nastaviJezik(prefs.jezik || jezikDrzave(prefs.drzava) || jezikNaprave(jeziki));
   prevediStran();
 }
 // Stalni deli strani (glava, preklop vlog) v jeziku aplikacije.
@@ -1003,7 +1004,7 @@ function settingsSheet() {
   const drzave = [...DRZAVE].sort((a, b) => (a === drzava() ? -1 : b === drzava() ? 1 : imeDrzave(a).localeCompare(imeDrzave(b), jz())));
   d.innerHTML = `<div role="dialog" aria-label="${t("Nastavitve")}"><h2 style="margin-top:0">${t("Nastavitve")}</h2>
     <label for="jzk">${t("Jezik")}</label>
-    <select id="jzk"><option value="">${t("Kot na telefonu")}</option>${JEZIKI.map((j) => `<option value="${j}"${prefs.jezik === j ? " selected" : ""}>${IMENA_JEZIKOV[j]}</option>`).join("")}</select>
+    <select id="jzk"><option value="">${t("Samodejno (po državi)")}</option>${JEZIKI.map((j) => `<option value="${j}"${prefs.jezik === j ? " selected" : ""}>${IMENA_JEZIKOV[j]}</option>`).join("")}</select>
     <label for="drz">${t("Država")}</label>
     <select id="drz">${drzave.map((c) => `<option value="${c}"${c === drzava() ? " selected" : ""}>${esc(imeDrzave(c))}</option>`).join("")}</select>
     ${S.mojster ? `<button class="btn ghost" type="button" id="prof">${t("Uredi profil mojstra")}</button>` : ""}
@@ -1017,7 +1018,10 @@ function settingsSheet() {
     <p class="note"><button class="link muted" type="button" id="skrb">${t("Za skrbnike")}</button></p></div>`;
   d.querySelector("#jzk").onchange = (e) => { prefs.jezik = e.target.value; savePrefs(); location.reload(); };
   d.querySelector("#drz").onchange = (e) => {
-    prefs.drzava = e.target.value; prefs.regija = ""; prefs.kraj = ""; prefs.krajRocno = false; draft.urejamKraj = true; savePrefs();
+    prefs.drzava = e.target.value; prefs.regija = ""; prefs.kraj = ""; prefs.krajRocno = false; draft.urejamKraj = true;
+    // Samodejni jezik sledi državi: aplikacijo naložimo znova v jeziku nove države.
+    if (!prefs.jezik) { Preferences.set({ key: "fixko", value: JSON.stringify(prefs) }).finally(() => location.reload()); return; }
+    savePrefs();
     S.pd = null; d.remove(); render();
     toast(t("Država je spremenjena"), imeDrzave(prefs.drzava));
   };

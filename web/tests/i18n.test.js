@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { P, MN } from "../src/prevodi.js";
 import { t, mn, nastaviJezik, jezikNaprave, imeAplikacije, JEZIKI } from "../src/i18n.js";
 import { opisTermina, dnevi, regijaIme, strokaIme, regijeDrzave, veljavnaTuja, cistaTuja } from "../src/data.js";
-import { pokriva, zaznajDrzavo, TUJE_REGIJE } from "../src/drzave.js";
+import { pokriva, zaznajDrzavo, jezikDrzave, TUJE_REGIJE } from "../src/drzave.js";
 import { prepoznajStroko } from "../src/pomoc.js";
 import { kljuci } from "./kljuci.js";
 
@@ -64,6 +64,10 @@ test("jezik in država naprave", () => {
   assert.equal(zaznajDrzavo(["en-US"], "America/Chicago"), "US");
   assert.equal(zaznajDrzavo(["fr-FR"], ""), "FR");
   for (const j of JEZIKI) assert.ok(j === "sl" || MN.mojster[j], j);
+  // Angleški iPhone v Sloveniji: aplikacija je slovenska (Popravko).
+  assert.equal(jezikDrzave(zaznajDrzavo(["en-GB"], "Europe/Ljubljana")), "sl");
+  assert.equal(jezikDrzave("AT"), "de");
+  assert.equal(jezikDrzave("SE"), "");
 });
 
 test("regije: mojster in delo v isti državi", () => {
