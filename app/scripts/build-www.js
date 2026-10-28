@@ -30,6 +30,7 @@ for (const f of [path.join(iosApp, "Info.plist"), ...fs.readdirSync(iosApp).filt
   const prej = fs.readFileSync(f, "utf8"), zdaj = prej.replace(/\b(Popravko|Fixko)\b/g, ime);
   if (zdaj !== prej) fs.writeFileSync(f, zdaj);
 }
+if (izdaja === "fixko") fs.copyFileSync(path.join(web, "logo-velik-fixko.png"), path.join(out, "logo-velik.png"));
 fs.writeFileSync(path.join(out, "izdaja.js"), `window.FIXKO_IZDAJA=${JSON.stringify(izdaja)};\n`);
 const ip = path.join(out, "index.html");
 fs.writeFileSync(ip, fs.readFileSync(ip, "utf8").replace("<title>Popravko</title>", `<title>${ime}</title>`).replace('<script src="app.js">', '<script src="izdaja.js"></script>\n  <script src="app.js">'));
