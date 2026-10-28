@@ -788,6 +788,32 @@ async function skrbnik(koda) {
 exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeconds: 120 }, async (req) => {
   if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Ni prijave.");
   await dostop(req);
+  return skrbnikAkcija(req);
+});
+
+// Popravko na stats.remako.si (repozitorij remako-trezor): ista dejanja kot zgoraj, prijava z Google računom projekta byurska-studio
+// (Teo še s kodo 2FA, enako kot stats.remako.si). Obvestila in naprave ostanejo samo na popravko.pregled.nakupko.com.
+const STATS_IZVORI = ["https://stats.remako.si", "https://remako-stats.web.app", "https://remako-stats.firebaseapp.com"];
+const STATS_SKRBNIKI = { "teo.simonic7@gmail.com": true, "urska.repusic@gmail.com": false, "repusicurska@gmail.com": false };
+const STATS_DEJANJA = new Set(["vsi", "statistika", "dela", "izbrisi-delo", "izbrisi-mojstra", "potrdi", "zavrni", "banka-stanje", "banka-povezi", "banka-preglej"]);
+const studio = () => admin.apps.find((a) => a.name === "studio") || admin.initializeApp({ projectId: "byurska-studio" }, "studio");
+exports.pregledStats = onRequest({ cors: STATS_IZVORI, secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeconds: 120 }, async (req, res) => {
+  try {
+    if (req.method !== "POST") return res.status(405).json({ napaka: "samo POST" });
+    const z = await studio().auth().verifyIdToken(String(req.get("authorization") || "").replace(/^Bearer /, ""));
+    const email = String(z.email || "").toLowerCase();
+    if (!z.email_verified || !(email in STATS_SKRBNIKI)) return res.status(403).json({ napaka: "ni dostopa" });
+    if (STATS_SKRBNIKI[email] && z.firebase?.sign_in_second_factor !== "totp") return res.status(403).json({ napaka: "potrebna koda 2FA" });
+    const data = req.body || {};
+    if (!STATS_DEJANJA.has(data.akcija)) return res.status(400).json({ napaka: "Neznano dejanje." });
+    res.json(await skrbnikAkcija({ data, auth: { uid: "stats:" + email, token: { email } } }));
+  } catch (e) {
+    console.warn("pregledStats", e.message);
+    res.status(e.httpErrorCode?.status || (String(e.code || "").startsWith("auth/") ? 401 : 500)).json({ napaka: e.message });
+  }
+});
+
+async function skrbnikAkcija(req) {
   const akcija = req.data?.akcija;
   if (akcija === "seznam") {
     const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();
@@ -871,7 +897,7 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
     try { return await preglejInSporoci(); } catch (e) { throw new HttpsError("unavailable", e.message); }
   }
   throw new HttpsError("invalid-argument", "Neznano dejanje.");
-});
+}
 
 /* ---------- brisanje podatkov ---------- */
 // Skrbnik izbriše mojstra: profil, ponudbe, ocene, slike. Dela, ki jih je imel prevzeta, se znova odprejo in stranka dobi obvestilo.
