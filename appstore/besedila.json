@@ -2,116 +2,18 @@
   "zasebnost": "https://remako.si/popravko/zasebnost.html",
   "podpora": "https://remako.si/popravko/",
   "copyright": "2026 REMAKO d.o.o.",
-  "opombe": "Fixko (called 'Popravko' in Slovenian) connects people who need a home repair with local contractors. One app for all countries: the UI language follows the device (10 languages), the country follows the device time zone and can be changed in Settings (gear icon) > Country. No login is needed (anonymous account). The app is free; there are no in-app purchases.\n\nCUSTOMER SIDE: tap 'I need a pro', add a photo and a short description, confirm the trade, enter the town and choose the area, pick time and budget, enter a phone number and tap 'Send to pros'. Contractors in that country and area get a notification and send an offer with a time; the customer accepts one and sees the contractor's name, company and phone.\n\nCONTRACTOR SIDE: tap 'I'm a pro' (top switch) and fill in the profile. Real contractors must verify their company (a 0.01 EUR bank transfer from the company account in the euro area, otherwise a manual review with an EU VIES VAT check), which a reviewer cannot do. FOR REVIEW please enter the company name 'Sraufnciger' (test company): it skips the tax number and the verification. Tip: post a job as a customer first, then switch to 'I'm a pro' with the same country, area and trade to see it under 'Open jobs' and tap 'Respond'.\n\nUSER CONTENT: every job post has a '•••' menu to report or hide it, and 'Report pro' reports a contractor. Reports are reviewed within 24 hours. Account and data deletion: Settings > 'Delete my data'.\n\nLocation is used only in Slovenia to fill in the user's town. Calendar/Reminders access is used only when the contractor taps 'Add to calendar and reminders'. The app shows Google AdMob ads.",
+  "verzija": "1.2",
+  "drzave": "SVN",
+  "opombe": "Popravko connects people in Slovenia who need a home repair with local contractors. No login is needed (anonymous account). The app is free; there are no in-app purchases.\n\nCUSTOMER SIDE: tap 'Rabim mojstra', add a photo and a short description, choose trade, town, time and budget, enter a phone number and tap 'Pošlji mojstrom'. Contractors in that region get a notification and send an offer with a date; the customer accepts one and sees the contractor's name, company and phone.\n\nCONTRACTOR SIDE: tap 'Sem mojster' (top switch) and fill in the profile. Real contractors must prove they own the company with a 0.01 EUR bank transfer from the company account, which a reviewer cannot do. FOR REVIEW please enter the company name 'Sraufnciger' (test company): it skips the tax number and the transfer check. Tip: post a job as a customer first, then switch to 'Sem mojster' with region and trade matching that job to see it under 'Prosta dela' and tap 'Javi se'.\n\nUSER CONTENT: every job post has a '•••' menu to report or hide it, and 'Prijavi mojstra' reports a contractor. Reports are reviewed within 24 hours. Account and data deletion: gear icon (Nastavitve) > 'Izbriši moje podatke'.\n\nLocation is used once, only to fill in the user's town. Calendar/Reminders access is used only when the contractor taps 'Dodaj v koledar in opomnike'. The app shows Google AdMob ads.",
   "jeziki": {
-    "sl": {
+    "sl-SI": {
       "ime": "Popravko",
       "podnaslov": "Mojster za vsako popravilo",
       "kljucne": "mojster,popravilo,vodovodar,električar,serviser,keramičar,pleskar,laminat,parket,zidar,okna,klima",
       "promo": "Slikaj, kaj je treba popraviti, in mojstri v bližini se javijo s terminom. Za stranke brezplačno.",
       "opis": "Popravko poveže ljudi, ki rabijo popravilo doma, z mojstri v njihovi bližini.\n\nZA STRANKE, BREZPLAČNO\n• Slikaj, kaj je treba popraviti, in na kratko opiši.\n• Izberi, kdaj in okvirno koliko.\n• Mojstri v tvoji bližini dobijo obvestilo in se javijo s terminom.\n• Izbereš mojstra, on te pokliče in pride.\nBrez registracije in brez obrazcev.\n\nZA MOJSTRE\n• Nova dela v tvoji regiji in stroki, takoj ko jih nekdo objavi.\n• Javiš se s terminom in okvirno ceno.\n• Ko te stranka izbere, dobiš njen telefon.\n• Termin dodaš v koledar in opomnike z enim dotikom.\n\nPREVERJENA PODJETJA\nMojstri so registrirani samostojni podjetniki ali podjetja. Vsako podjetje potrdimo z nakazilom 1 centa z računa podjetja, zato veš, kdo prihaja k tebi.\n\nVodovodarji, električarji, keramičarji, pleskarji, talne obloge (laminat, parket), zidarji in fasade, mizarji, okna, vrata in senčila, gospodinjski aparati, krovci, vrtnarji, ogrevanje in klima, montaža pohištva, čiščenje, selitve in prevozi. Po vsej Sloveniji.\n\nPopravko je storitev podjetja REMAKO d.o.o.",
       "zasebnost": "https://remako.si/popravko/zasebnost.html",
-      "novo": "Popravko zdaj deluje tudi v tujini (kot Fixko) v 10 jezikih. V Sloveniji se ni nič spremenilo."
-    },
-    "en-GB": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: Find a Local Pro",
-      "podnaslov": "A pro for every home repair",
-      "kljucne": "handyman,plumber,electrician,repair,tiler,painter,builder,carpenter,cleaner,gardener,roofer,fix",
-      "promo": "Snap what needs fixing and local pros reply with a time. Free for customers.",
-      "opis": "Fixko connects people who need a repair at home with local pros.\n\nFOR CUSTOMERS, FREE\n• Take a photo of what needs fixing and describe it in a few words.\n• Choose when and roughly how much.\n• Pros nearby get a notification and reply with a time.\n• Pick a pro, they call you and come round.\n\nFOR PROS\n• New jobs in your area and trade the moment they're posted.\n• Reply with a time and an estimated price.\n• When the customer picks you, you get their phone number.\n• Add the appointment to your calendar in one tap.\n\nVERIFIED COMPANIES\nPros are registered businesses. We verify every company, so you know who is coming to your home.\n\nPlumbers, electricians, tilers, painters, flooring, builders, carpenters, windows and doors, appliances, roofers, gardeners, heating and air con, furniture assembly, cleaning, moving. In 10 languages, across Europe and beyond.\n\nFixko is a service of REMAKO d.o.o.",
-      "novo": "Fixko is now available in 10 languages and many countries, with regions for each country.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "de-DE": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: Handwerker finden",
-      "podnaslov": "Handwerker für jede Reparatur",
-      "kljucne": "handwerker,installateur,elektriker,reparatur,fliesenleger,maler,tischler,hausmeister,klempner",
-      "promo": "Foto machen, was kaputt ist, und Handwerker in der Nähe melden sich mit einem Termin. Für Kunden kostenlos.",
-      "opis": "Fixko verbindet Menschen, die zu Hause eine Reparatur brauchen, mit Handwerkern in ihrer Nähe.\n\nFÜR KUNDEN, KOSTENLOS\n• Fotografieren Sie, was repariert werden muss, und beschreiben Sie es kurz.\n• Wählen Sie, wann und ungefähr wie teuer.\n• Handwerker in der Nähe werden benachrichtigt und melden sich mit einem Termin.\n• Sie wählen einen Handwerker, er ruft an und kommt vorbei.\n\nFÜR HANDWERKER\n• Neue Aufträge in deiner Region und deinem Gewerk, sobald sie online sind.\n• Melde dich mit Termin und ungefährem Preis.\n• Wählt dich der Kunde, bekommst du seine Telefonnummer.\n• Termin mit einem Tipp in den Kalender.\n\nGEPRÜFTE FIRMEN\nHandwerker sind eingetragene Betriebe. Wir prüfen jede Firma, damit Sie wissen, wer zu Ihnen kommt.\n\nInstallateure, Elektriker, Fliesenleger, Maler, Bodenleger, Maurer, Tischler, Fenster und Türen, Hausgeräte, Dachdecker, Gärtner, Heizung und Klima, Möbelmontage, Reinigung, Umzüge.\n\nFixko ist ein Dienst der REMAKO d.o.o.",
-      "novo": "Fixko gibt es jetzt auf Deutsch und in vielen Ländern, mit Regionen für jedes Land.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "fr-FR": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko : trouver un artisan",
-      "podnaslov": "Un artisan pour chaque panne",
-      "kljucne": "artisan,plombier,electricien,depannage,reparation,carreleur,peintre,menuisier,bricolage,travaux",
-      "promo": "Photographiez ce qui est à réparer et les artisans proches répondent avec un créneau. Gratuit pour les clients.",
-      "opis": "Fixko met en relation les personnes qui ont besoin d'une réparation à domicile avec des artisans proches.\n\nPOUR LES CLIENTS, GRATUIT\n• Photographiez ce qui est à réparer et décrivez-le en quelques mots.\n• Choisissez quand et le budget approximatif.\n• Les artisans proches sont prévenus et proposent un créneau.\n• Vous choisissez, l'artisan vous appelle et vient.\n\nPOUR LES ARTISANS\n• Nouveaux travaux dans votre région et votre métier dès leur publication.\n• Répondez avec un créneau et un prix estimé.\n• Quand le client vous choisit, vous recevez son numéro.\n• Ajoutez le rendez-vous au calendrier en un geste.\n\nENTREPRISES VÉRIFIÉES\nLes artisans sont des entreprises enregistrées. Nous vérifions chaque entreprise.\n\nPlombiers, électriciens, carreleurs, peintres, sols, maçons, menuisiers, fenêtres et portes, électroménager, couvreurs, jardiniers, chauffage et clim, montage de meubles, nettoyage, déménagement.\n\nFixko est un service de REMAKO d.o.o.",
-      "novo": "Fixko est désormais disponible en français et dans de nombreux pays.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "it": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: trova un artigiano",
-      "podnaslov": "Un esperto per ogni guasto",
-      "kljucne": "idraulico,elettricista,riparazioni,artigiano,piastrellista,imbianchino,falegname,tuttofare,casa",
-      "promo": "Fotografa cosa c'è da riparare e i professionisti vicini rispondono con un orario. Gratis per i clienti.",
-      "opis": "Fixko mette in contatto chi ha bisogno di una riparazione in casa con professionisti della zona.\n\nPER I CLIENTI, GRATIS\n• Fotografa cosa c'è da riparare e descrivilo in poche parole.\n• Scegli quando e il budget indicativo.\n• I professionisti vicini ricevono una notifica e propongono un orario.\n• Scegli tu, il professionista ti chiama e arriva.\n\nPER I PROFESSIONISTI\n• Nuovi lavori nella tua zona e nel tuo mestiere appena pubblicati.\n• Rispondi con orario e prezzo indicativo.\n• Quando il cliente ti sceglie, ricevi il suo numero.\n• Aggiungi l'appuntamento al calendario con un tocco.\n\nAZIENDE VERIFICATE\nI professionisti sono imprese registrate. Verifichiamo ogni azienda.\n\nIdraulici, elettricisti, piastrellisti, imbianchini, pavimenti, muratori, falegnami, finestre e porte, elettrodomestici, tetti, giardinieri, riscaldamento e clima, montaggio mobili, pulizie, traslochi.\n\nFixko è un servizio di REMAKO d.o.o.",
-      "novo": "Fixko ora è disponibile in italiano e in molti paesi.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "es-ES": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: encuentra un manitas",
-      "podnaslov": "Un experto para cada avería",
-      "kljucne": "fontanero,electricista,reparaciones,manitas,albañil,pintor,carpintero,reformas,averias,hogar",
-      "promo": "Haz una foto de lo que hay que arreglar y los profesionales cercanos responden con una hora. Gratis para clientes.",
-      "opis": "Fixko conecta a quien necesita una reparación en casa con profesionales de su zona.\n\nPARA CLIENTES, GRATIS\n• Haz una foto de lo que hay que arreglar y descríbelo brevemente.\n• Elige cuándo y el presupuesto aproximado.\n• Los profesionales cercanos reciben un aviso y proponen una hora.\n• Eliges uno, te llama y va a tu casa.\n\nPARA PROFESIONALES\n• Trabajos nuevos en tu zona y oficio en cuanto se publican.\n• Responde con hora y precio aproximado.\n• Cuando el cliente te elige, recibes su teléfono.\n• Añade la cita al calendario con un toque.\n\nEMPRESAS VERIFICADAS\nLos profesionales son empresas o autónomos registrados. Verificamos cada empresa.\n\nFontaneros, electricistas, alicatadores, pintores, suelos, albañiles, carpinteros, ventanas y puertas, electrodomésticos, tejados, jardineros, calefacción y aire, montaje de muebles, limpieza, mudanzas.\n\nFixko es un servicio de REMAKO d.o.o.",
-      "novo": "Fixko ya está disponible en español y en muchos países.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "pt-PT": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: encontre um técnico",
-      "podnaslov": "Um técnico para cada avaria",
-      "kljucne": "canalizador,eletricista,reparacoes,faz-tudo,pedreiro,pintor,carpinteiro,obras,remodelacao,casa",
-      "promo": "Fotografe o que precisa de arranjo e os profissionais perto respondem com uma hora. Grátis para clientes.",
-      "opis": "A Fixko liga quem precisa de uma reparação em casa a profissionais da sua zona.\n\nPARA CLIENTES, GRÁTIS\n• Fotografe o que precisa de arranjo e descreva em poucas palavras.\n• Escolha quando e o orçamento aproximado.\n• Os profissionais perto recebem um aviso e propõem uma hora.\n• Escolhe um, ele liga-lhe e vai a sua casa.\n\nPARA PROFISSIONAIS\n• Novos trabalhos na sua zona e profissão assim que são publicados.\n• Responda com hora e preço aproximado.\n• Quando o cliente o escolhe, recebe o telefone.\n• Adicione a marcação ao calendário com um toque.\n\nEMPRESAS VERIFICADAS\nOs profissionais são empresas registadas. Verificamos cada empresa.\n\nCanalizadores, eletricistas, ladrilhadores, pintores, pavimentos, pedreiros, carpinteiros, janelas e portas, eletrodomésticos, telhados, jardineiros, aquecimento e AC, montagem de móveis, limpeza, mudanças.\n\nA Fixko é um serviço da REMAKO d.o.o.",
-      "novo": "A Fixko já está disponível em português e em muitos países.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "nl-NL": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: vind een vakman",
-      "podnaslov": "Een vakman voor elke klus",
-      "kljucne": "klusjesman,loodgieter,elektricien,reparatie,tegelzetter,schilder,timmerman,klussen,aannemer",
-      "promo": "Maak een foto van wat er kapot is en vakmensen in de buurt reageren met een tijd. Gratis voor klanten.",
-      "opis": "Fixko verbindt mensen die thuis een reparatie nodig hebben met vakmensen in de buurt.\n\nVOOR KLANTEN, GRATIS\n• Maak een foto van wat er gemaakt moet worden en beschrijf het kort.\n• Kies wanneer en ongeveer hoeveel.\n• Vakmensen in de buurt krijgen een melding en stellen een tijd voor.\n• Je kiest er een, hij belt je en komt langs.\n\nVOOR VAKMENSEN\n• Nieuwe klussen in jouw regio en vak zodra ze geplaatst zijn.\n• Reageer met een tijd en een geschatte prijs.\n• Kiest de klant jou, dan krijg je het telefoonnummer.\n• Afspraak met één tik in je agenda.\n\nGEVERIFIEERDE BEDRIJVEN\nVakmensen zijn geregistreerde bedrijven. We controleren elk bedrijf.\n\nLoodgieters, elektriciens, tegelzetters, schilders, vloeren, metselaars, timmerlieden, ramen en deuren, witgoed, dakdekkers, hoveniers, verwarming en airco, meubelmontage, schoonmaak, verhuizingen.\n\nFixko is een dienst van REMAKO d.o.o.",
-      "novo": "Fixko is nu beschikbaar in het Nederlands en in veel landen.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "pl": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: znajdź fachowca",
-      "podnaslov": "Fachowiec do każdej naprawy",
-      "kljucne": "fachowiec,hydraulik,elektryk,naprawa,glazurnik,malarz,stolarz,remont,zlota raczka,dom",
-      "promo": "Zrób zdjęcie tego, co trzeba naprawić, a fachowcy z okolicy zgłoszą się z terminem. Dla klientów za darmo.",
-      "opis": "Fixko łączy osoby, które potrzebują naprawy w domu, z fachowcami z okolicy.\n\nDLA KLIENTÓW, ZA DARMO\n• Zrób zdjęcie tego, co trzeba naprawić, i krótko opisz.\n• Wybierz kiedy i orientacyjny budżet.\n• Fachowcy w pobliżu dostają powiadomienie i proponują termin.\n• Wybierasz fachowca, on dzwoni i przyjeżdża.\n\nDLA FACHOWCÓW\n• Nowe zlecenia w Twoim regionie i branży zaraz po publikacji.\n• Zgłoś się z terminem i orientacyjną ceną.\n• Gdy klient Cię wybierze, dostaniesz jego numer.\n• Termin do kalendarza jednym dotknięciem.\n\nZWERYFIKOWANE FIRMY\nFachowcy to zarejestrowane firmy. Weryfikujemy każdą firmę.\n\nHydraulicy, elektrycy, glazurnicy, malarze, podłogi, murarze, stolarze, okna i drzwi, AGD, dekarze, ogrodnicy, ogrzewanie i klima, montaż mebli, sprzątanie, przeprowadzki.\n\nFixko to usługa REMAKO d.o.o.",
-      "novo": "Fixko jest już dostępny po polsku i w wielu krajach.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "hr": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: pronađi majstora",
-      "podnaslov": "Majstor za svaki popravak",
-      "kljucne": "majstor,vodoinstalater,električar,popravak,keramičar,soboslikar,stolar,servis,kuća,obrtnik",
-      "promo": "Fotografirajte što treba popraviti i majstori u blizini jave se s terminom. Za stranke besplatno.",
-      "opis": "Fixko povezuje ljude kojima treba popravak kod kuće s majstorima u blizini.\n\nZA STRANKE, BESPLATNO\n• Fotografirajte što treba popraviti i ukratko opišite.\n• Odaberite kada i okvirni iznos.\n• Majstori u blizini dobiju obavijest i jave se s terminom.\n• Odaberete majstora, on vas nazove i dođe.\n\nZA MAJSTORE\n• Novi poslovi u tvojoj regiji i struci čim ih netko objavi.\n• Javiš se s terminom i okvirnom cijenom.\n• Kad te stranka odabere, dobiješ njezin broj.\n• Termin u kalendar jednim dodirom.\n\nPROVJERENE TVRTKE\nMajstori su registrirani obrtnici ili tvrtke. Svaku tvrtku provjeravamo.\n\nVodoinstalateri, električari, keramičari, soboslikari, podovi, zidari, stolari, prozori i vrata, kućanski aparati, krovopokrivači, vrtlari, grijanje i klima, montaža namještaja, čišćenje, selidbe.\n\nFixko je usluga tvrtke REMAKO d.o.o.",
-      "novo": "Fixko je sada dostupan na hrvatskom i u mnogim zemljama.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
-    },
-    "en-US": {
-      "ime": "Fixko",
-      "ime_rezerva": "Fixko: Find a Local Pro",
-      "podnaslov": "A pro for every home repair",
-      "kljucne": "handyman,plumber,electrician,repair,tiler,painter,builder,carpenter,cleaner,gardener,roofer,fix",
-      "promo": "Snap what needs fixing and local pros reply with a time. Free for customers.",
-      "opis": "Fixko connects people who need a repair at home with local pros.\n\nFOR CUSTOMERS, FREE\n• Take a photo of what needs fixing and describe it in a few words.\n• Choose when and roughly how much.\n• Pros nearby get a notification and reply with a time.\n• Pick a pro, they call you and come round.\n\nFOR PROS\n• New jobs in your area and trade the moment they're posted.\n• Reply with a time and an estimated price.\n• When the customer picks you, you get their phone number.\n• Add the appointment to your calendar in one tap.\n\nVERIFIED COMPANIES\nPros are registered businesses. We verify every company, so you know who is coming to your home.\n\nPlumbers, electricians, tilers, painters, flooring, builders, carpenters, windows and doors, appliances, roofers, gardeners, heating and air con, furniture assembly, cleaning, moving. In 10 languages, across Europe and beyond.\n\nFixko is a service of REMAKO d.o.o.",
-      "novo": "Fixko is now available in 10 languages and many countries, with regions for each country.",
-      "zasebnost": "https://popravko.web.app/zasebnost-en"
+      "novo": "Popravljene reklame in manjše izboljšave."
     }
   }
 }

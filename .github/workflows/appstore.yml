@@ -4,8 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       akcija:
-        description: "stanje | vpisi | slike | oddaj | drzave"
+        description: "stanje | vpisi | slike | oddaj | drzave | bundle"
         default: "stanje"
+      aplikacija:
+        description: "popravko | fixko"
+        default: "popravko"
 
 jobs:
   appstore:
@@ -18,5 +21,7 @@ jobs:
           KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
-          BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+          BUNDLE_ID: ${{ inputs.aplikacija == 'fixko' && 'com.remako.fixko' || vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+          IME: ${{ inputs.aplikacija == 'fixko' && 'Fixko' || 'Popravko' }}
+          APLIKACIJA: ${{ inputs.aplikacija }}
           AKCIJA: ${{ inputs.akcija }}

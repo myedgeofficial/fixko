@@ -36,7 +36,7 @@ test("slovenščina ostane nespremenjena", () => {
 
 test("angleščina in nemščina", () => {
   nastaviJezik("en");
-  assert.equal(imeAplikacije(), "Fixko");
+  assert.equal(imeAplikacije(), "Popravko", "ime je vezano na aplikacijo, ne na jezik");
   assert.equal(t("Rabim mojstra"), "I need a pro");
   assert.equal(strokaIme("elektrika"), "Electrician");
   assert.equal(t("Ljubljana z okolico"), "Ljubljana area");

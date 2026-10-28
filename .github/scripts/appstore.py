@@ -37,6 +37,16 @@ def poslji(metoda, pot, data):
     return r.json() if ok and r.text else {}
 
 
+# Nova aplikacija (Fixko): registriraj bundle ID z obvestili; aplikacijo v App Store Connect potem ustvari človek.
+if AKCIJA == "bundle":
+    obst = [x for x in get("/bundleIds", **{"filter[identifier]": os.environ["BUNDLE_ID"]})["data"] if x["attributes"]["identifier"] == os.environ["BUNDLE_ID"]]
+    bid = obst[0]["id"] if obst else poslji("POST", "/bundleIds", {"type": "bundleIds", "attributes": {"identifier": os.environ["BUNDLE_ID"], "name": os.environ.get("IME", "Fixko"), "platform": "IOS"}}).get("data", {}).get("id")
+    print("BUNDLE", os.environ["BUNDLE_ID"], bid)
+    if bid and "PUSH_NOTIFICATIONS" not in [c["attributes"]["capabilityType"] for c in get(f"/bundleIds/{bid}/bundleIdCapabilities")["data"]]:
+        poslji("POST", "/bundleIdCapabilities", {"type": "bundleIdCapabilities", "attributes": {"capabilityType": "PUSH_NOTIFICATIONS"}, "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bid}}}})
+    print("APPS", [a["attributes"]["name"] for a in get("/apps", **{"filter[bundleId]": os.environ["BUNDLE_ID"]})["data"]])
+    sys.exit(1 if napaka else 0)
+
 app = get("/apps", **{"filter[bundleId]": os.environ["BUNDLE_ID"]})["data"][0]
 AID = app["id"]
 print("APP", json.dumps(app["attributes"], ensure_ascii=False))
@@ -74,7 +84,16 @@ def json_poslji(metoda, pot, telo):
     return r.json() if ok and r.text else {}
 
 
-B = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/besedila.json")))
+# Besedila: Popravko (appstore/besedila.json, samo slovensko) ali Fixko (appstore/fixko.json, tuji jeziki).
+B = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/" + ("fixko.json" if os.environ.get("APLIKACIJA") == "fixko" else "besedila.json"))))
+# Nova verzija (npr. 1.2), če še ni nobene v pripravi in je objavljena starejša.
+if ver is None and AKCIJA == "vpisi" and B.get("verzija") and B["verzija"] not in [v["attributes"]["versionString"] for v in verzije]:
+    ver = poslji("POST", "/appStoreVersions", {"type": "appStoreVersions", "attributes": {"platform": "IOS", "versionString": B["verzija"]},
+        "relationships": {"app": {"data": {"type": "apps", "id": AID}}}}).get("data")
+    if ver: verzije = verzije + [ver]
+# Podatki o aplikaciji (ime, podnaslov) se urejajo na appInfo, ki pripada verziji v pripravi (nastane z njo).
+infos = get(f"/apps/{AID}/appInfos")["data"]
+info = next((i for i in infos if (i["attributes"].get("appStoreState") or i["attributes"].get("state")) not in ("READY_FOR_SALE", "READY_FOR_DISTRIBUTION")), infos[0])
 if ver is None and AKCIJA not in ("stanje", "drzave"):
     print("::error::Ni verzije v pripravi"); sys.exit(1)
 
@@ -82,6 +101,9 @@ if AKCIJA == "vpisi":
     CENA_OK = requests.get(f"{API}/apps/{AID}/appPriceSchedule/manualPrices", headers=H, timeout=60).json().get("data")
     # Ime in podnaslov po jezikih: obstoječe posodobimo, manjkajoče ustvarimo. Če je ime zasedeno, poskusimo rezervno.
     obst = {l["attributes"]["locale"]: l for l in get(f"/appInfos/{info['id']}/appInfoLocalizations")["data"]}
+    for loc, l in obst.items():
+        if loc not in B["jeziki"] and loc != app["attributes"].get("primaryLocale"):
+            r = requests.delete(f"{API}/appInfoLocalizations/{l['id']}", headers=H, timeout=60); print("ODSTRANI INFOLOC", loc, r.status_code)
     for loc, L in B["jeziki"].items():
         for ime in [L["ime"]] + ([L["ime_rezerva"]] if L.get("ime_rezerva") else []):
             atr = {"name": ime, "subtitle": L["podnaslov"], "privacyPolicyUrl": L["zasebnost"]}
@@ -104,8 +126,11 @@ if AKCIJA == "vpisi":
     poslji("PATCH", f"/apps/{AID}", {"type": "apps", "id": AID, "attributes": {"contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"}})
     poslji("PATCH", f"/appStoreVersions/{ver['id']}", {"type": "appStoreVersions", "id": ver["id"], "attributes": {"copyright": B["copyright"], "releaseType": "AFTER_APPROVAL"}})
     # Opis, ključne besede, promocija in novosti po jezikih (prva verzija novosti nima).
-    prva = len(verzije) <= 1
+    prva = not any(v["attributes"]["appStoreState"] == "READY_FOR_SALE" for v in verzije)
     vl = {l["attributes"]["locale"]: l for l in get(f"/appStoreVersions/{ver['id']}/appStoreVersionLocalizations")["data"]}
+    for loc, l in vl.items():
+        if loc not in B["jeziki"] and loc != app["attributes"].get("primaryLocale"):
+            r = requests.delete(f"{API}/appStoreVersionLocalizations/{l['id']}", headers=H, timeout=60); print("ODSTRANI VERLOC", loc, r.status_code)
     for loc, L in B["jeziki"].items():
         atr = {"description": L["opis"], "keywords": L["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B["podpora"], "promotionalText": L["promo"], **({} if prva else {"whatsNew": L["novo"]})}
         if loc in vl:
@@ -145,9 +170,9 @@ if AKCIJA == "vpisi":
     print("DOSTOPNOST", r.status_code, " ".join(r.text.split())[:300])
     if r.status_code == 404 or not r.json().get("data"):
         ter = [t["id"] for t in get("/territories", limit=200)["data"]]
-        json_poslji("POST", "https://api.appstoreconnect.apple.com/v2/appAvailabilities", {"data": {"type": "appAvailabilities", "attributes": {"availableInNewTerritories": False},
+        json_poslji("POST", "https://api.appstoreconnect.apple.com/v2/appAvailabilities", {"data": {"type": "appAvailabilities", "attributes": {"availableInNewTerritories": B.get("drzave") == "razen:SVN"},
             "relationships": {"app": {"data": {"type": "apps", "id": AID}}, "territoryAvailabilities": {"data": [{"type": "territoryAvailabilities", "id": "${" + t + "}"} for t in ter]}}},
-            "included": [{"type": "territoryAvailabilities", "id": "${" + t + "}", "attributes": {"available": t == "SVN"}, "relationships": {"territory": {"data": {"type": "territories", "id": t}}}} for t in ter]})
+            "included": [{"type": "territoryAvailabilities", "id": "${" + t + "}", "attributes": {"available": (t != "SVN") if B.get("drzave") == "razen:SVN" else (t == "SVN")}, "relationships": {"territory": {"data": {"type": "territories", "id": t}}}} for t in ter]})
     # zadnji veljaven build
     bl = [b for b in get("/builds", **{"filter[app]": AID, "sort": "-uploadedDate", "limit": 5})["data"] if b["attributes"]["processingState"] == "VALID" and not b["attributes"].get("expired")]
     if bl:
