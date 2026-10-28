@@ -4,7 +4,7 @@
   "copyright": "2026 REMAKO d.o.o.",
   "opombe": "Fixko (called 'Popravko' in Slovenian) connects people who need a home repair with local contractors. One app for all countries: the UI language follows the device (10 languages), the country follows the device time zone and can be changed in Settings (gear icon) > Country. No login is needed (anonymous account). The app is free; there are no in-app purchases.\n\nCUSTOMER SIDE: tap 'I need a pro', add a photo and a short description, confirm the trade, enter the town and choose the area, pick time and budget, enter a phone number and tap 'Send to pros'. Contractors in that country and area get a notification and send an offer with a time; the customer accepts one and sees the contractor's name, company and phone.\n\nCONTRACTOR SIDE: tap 'I'm a pro' (top switch) and fill in the profile. Real contractors must verify their company (a 0.01 EUR bank transfer from the company account in the euro area, otherwise a manual review with an EU VIES VAT check), which a reviewer cannot do. FOR REVIEW please enter the company name 'Sraufnciger' (test company): it skips the tax number and the verification. Tip: post a job as a customer first, then switch to 'I'm a pro' with the same country, area and trade to see it under 'Open jobs' and tap 'Respond'.\n\nUSER CONTENT: every job post has a '•••' menu to report or hide it, and 'Report pro' reports a contractor. Reports are reviewed within 24 hours. Account and data deletion: Settings > 'Delete my data'.\n\nLocation is used only in Slovenia to fill in the user's town. Calendar/Reminders access is used only when the contractor taps 'Add to calendar and reminders'. The app shows Google AdMob ads.",
   "jeziki": {
-    "sl": {
+    "sl-SI": {
       "ime": "Popravko",
       "podnaslov": "Mojster za vsako popravilo",
       "kljucne": "mojster,popravilo,vodovodar,električar,serviser,keramičar,pleskar,laminat,parket,zidar,okna,klima",
@@ -113,5 +113,6 @@
       "novo": "Fixko is now available in 10 languages and many countries, with regions for each country.",
       "zasebnost": "https://popravko.web.app/zasebnost-en"
     }
-  }
+  },
+  "verzija": "1.2"
 }

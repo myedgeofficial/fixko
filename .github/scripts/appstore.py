@@ -85,6 +85,11 @@ def json_poslji(metoda, pot, telo):
 
 
 B = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/besedila.json")))
+# Nova verzija (npr. 1.2), če še ni nobene v pripravi in je objavljena starejša.
+if ver is None and AKCIJA == "vpisi" and B.get("verzija") and B["verzija"] not in [v["attributes"]["versionString"] for v in verzije]:
+    ver = poslji("POST", "/appStoreVersions", {"type": "appStoreVersions", "attributes": {"platform": "IOS", "versionString": B["verzija"]},
+        "relationships": {"app": {"data": {"type": "apps", "id": AID}}}}).get("data")
+    if ver: verzije = verzije + [ver]
 if ver is None and AKCIJA not in ("stanje", "drzave"):
     print("::error::Ni verzije v pripravi"); sys.exit(1)
 
@@ -114,7 +119,7 @@ if AKCIJA == "vpisi":
     poslji("PATCH", f"/apps/{AID}", {"type": "apps", "id": AID, "attributes": {"contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"}})
     poslji("PATCH", f"/appStoreVersions/{ver['id']}", {"type": "appStoreVersions", "id": ver["id"], "attributes": {"copyright": B["copyright"], "releaseType": "AFTER_APPROVAL"}})
     # Opis, ključne besede, promocija in novosti po jezikih (prva verzija novosti nima).
-    prva = len(verzije) <= 1
+    prva = not any(v["attributes"]["appStoreState"] == "READY_FOR_SALE" for v in verzije)
     vl = {l["attributes"]["locale"]: l for l in get(f"/appStoreVersions/{ver['id']}/appStoreVersionLocalizations")["data"]}
     for loc, L in B["jeziki"].items():
         atr = {"description": L["opis"], "keywords": L["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B["podpora"], "promotionalText": L["promo"], **({} if prva else {"whatsNew": L["novo"]})}
