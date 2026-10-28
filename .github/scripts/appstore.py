@@ -80,6 +80,9 @@ if ver is None and AKCIJA == "vpisi" and B.get("verzija") and B["verzija"] not i
     ver = poslji("POST", "/appStoreVersions", {"type": "appStoreVersions", "attributes": {"platform": "IOS", "versionString": B["verzija"]},
         "relationships": {"app": {"data": {"type": "apps", "id": AID}}}}).get("data")
     if ver: verzije = verzije + [ver]
+# Podatki o aplikaciji (ime, podnaslov) se urejajo na appInfo, ki pripada verziji v pripravi (nastane z njo).
+infos = get(f"/apps/{AID}/appInfos")["data"]
+info = next((i for i in infos if (i["attributes"].get("appStoreState") or i["attributes"].get("state")) not in ("READY_FOR_SALE", "READY_FOR_DISTRIBUTION")), infos[0])
 if ver is None and AKCIJA not in ("stanje", "drzave"):
     print("::error::Ni verzije v pripravi"); sys.exit(1)
 
