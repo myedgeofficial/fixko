@@ -39,6 +39,11 @@ export function pokriva(r, delo) {
   return jeVsa(r) && drzavaRegije(r) === drzavaRegije(delo);
 }
 
+// Jezik aplikacije Fixko po državi (kjer ga podpiramo); drugod "" = jezik telefona.
+const DRZAVA_JEZIK = { SI: "sl", HR: "hr", BA: "hr", DE: "de", AT: "de", CH: "de", LI: "de", FR: "fr", MC: "fr", LU: "fr", IT: "it", SM: "it", VA: "it",
+  ES: "es", AD: "es", PT: "pt", NL: "nl", PL: "pl", GB: "en", IE: "en", US: "en", CA: "en", AU: "en", NZ: "en", MT: "en" };
+export const jezikDrzave = (cc) => DRZAVA_JEZIK[cc] || "";
+
 // Država iz časovnega pasu naprave (zanesljivejše od jezika), nato iz jezika.
 const PASOVI = {
   Ljubljana: "SI", Zagreb: "HR", Vienna: "AT", Berlin: "DE", Busingen: "DE", Zurich: "CH", Rome: "IT", Paris: "FR", Madrid: "ES", Canary: "ES",

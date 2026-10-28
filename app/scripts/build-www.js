@@ -21,6 +21,20 @@ for (const f of ["index.html", "app.css", "zasebnost.html", "pogoji.html", "zase
 const gs = path.resolve(__dirname, "..", "android", "app", "google-services.json");
 const push = fs.existsSync(gs) && fs.readFileSync(gs, "utf8").trim() ? "window.FIXKO_PUSH=true;\n" : "";
 
+// Izdaja: Popravko (privzeto, Slovenija) ali Fixko (tujina, FIXKO_IZDAJA=fixko). Ime na iPhonu (Info.plist in vsi jeziki) mora ustrezati izdaji.
+const izdaja = process.env.FIXKO_IZDAJA === "fixko" ? "fixko" : "popravko";
+const ime = izdaja === "fixko" ? "Fixko" : "Popravko";
+const iosApp = path.resolve(__dirname, "..", "ios", "App", "App");
+for (const f of [path.join(iosApp, "Info.plist"), ...fs.readdirSync(iosApp).filter((d) => d.endsWith(".lproj")).map((d) => path.join(iosApp, d, "InfoPlist.strings"))]) {
+  if (!fs.existsSync(f)) continue;
+  const prej = fs.readFileSync(f, "utf8"), zdaj = prej.replace(/\b(Popravko|Fixko)\b/g, ime);
+  if (zdaj !== prej) fs.writeFileSync(f, zdaj);
+}
+fs.writeFileSync(path.join(out, "izdaja.js"), `window.FIXKO_IZDAJA=${JSON.stringify(izdaja)};\n`);
+const ip = path.join(out, "index.html");
+fs.writeFileSync(ip, fs.readFileSync(ip, "utf8").replace("<title>Popravko</title>", `<title>${ime}</title>`).replace('<script src="app.js">', '<script src="izdaja.js"></script>\n  <script src="app.js">'));
+console.log("Izdaja:", ime);
+
 let cfg = process.env.FIXKO_FB_CONFIG || "";
 const file = path.resolve(__dirname, "..", "fb-config.json");
 if (!cfg && fs.existsSync(file)) cfg = fs.readFileSync(file, "utf8");

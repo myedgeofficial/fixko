@@ -388,7 +388,7 @@ export const P = [
 ["Drugo", "Other", "Sonstiges", "Autre", "Altro", "Otro", "Outro", "Anders", "Inne", "Ostalo"],
 // nastavitve
 ["Jezik", "Language", "Sprache", "Langue", "Lingua", "Idioma", "Idioma", "Taal", "Język", "Jezik"],
-["Kot na telefonu", "Same as phone", "Wie am Telefon", "Comme le téléphone", "Come il telefono", "Como el teléfono", "Como no telemóvel", "Zoals telefoon", "Jak w telefonie", "Kao na mobitelu"],
+["Samodejno (po državi)", "Automatic (by country)", "Automatisch (nach Land)", "Automatique (selon le pays)", "Automatica (per paese)", "Automático (según el país)", "Automático (por país)", "Automatisch (per land)", "Automatycznie (wg kraju)", "Automatski (prema državi)"],
 ["Država", "Country", "Land", "Pays", "Paese", "País", "País", "Land", "Kraj", "Država"],
 ["Upravljaj naročnino", "Manage subscription", "Abo verwalten", "Gérer l'abonnement", "Gestisci abbonamento", "Gestionar suscripción", "Gerir subscrição", "Abonnement beheren", "Zarządzaj subskrypcją", "Upravljaj pretplatom"],
 ["Vklopi obvestila", "Turn on notifications", "Mitteilungen aktivieren", "Activer les notifications", "Attiva notifiche", "Activar notificaciones", "Ligar notificações", "Meldingen aanzetten", "Włącz powiadomienia", "Uključi obavijesti"],

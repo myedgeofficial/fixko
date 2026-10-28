@@ -15,6 +15,11 @@ concurrency:
 
 jobs:
   ios:
+    # Iz iste kode dve aplikaciji: Popravko (Slovenija) in Fixko (tujina, svoj bundle).
+    strategy:
+      fail-fast: false
+      matrix:
+        izdaja: [popravko, fixko]
     runs-on: macos-26
     timeout-minutes: 60
     defaults:
@@ -22,7 +27,8 @@ jobs:
         shell: bash
         working-directory: app
     env:
-      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+      BUNDLE_ID: ${{ matrix.izdaja == 'fixko' && 'com.remako.fixko' || vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+      FIXKO_IZDAJA: ${{ matrix.izdaja }}
       FIREBASE_PROJECT: ${{ vars.FIREBASE_PROJECT || 'fixko-app' }}
       HAS_SECRETS: ${{ secrets.APPSTORE_KEY_P8 != '' && secrets.APPSTORE_KEY_ID != '' && secrets.APPSTORE_ISSUER_ID != '' && secrets.APPLE_TEAM_ID != '' }}
     steps:
@@ -39,6 +45,7 @@ jobs:
           cache-dependency-path: app/package-lock.json
 
       - name: Preizkusi pomožne funkcije (termini, telefon)
+        if: matrix.izdaja == 'popravko'
         working-directory: web
         run: node --test tests/*.test.js
 
@@ -73,6 +80,8 @@ jobs:
 
       - name: Zgradi, podpiši in naloži na TestFlight
         if: github.event_name != 'pull_request' && env.HAS_SECRETS == 'true'
+        # Fixko: dokler aplikacija v App Store Connect ne obstaja, nalaganje ne sme ustaviti Popravka.
+        continue-on-error: ${{ matrix.izdaja == 'fixko' }}
         working-directory: app/ios/App
         env:
           KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}

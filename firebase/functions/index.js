@@ -24,6 +24,8 @@ setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
 const db = admin.firestore();
 
 const BUNDLE_ID = process.env.APNS_TOPIC || "si.fixko.app";
+// Aplikacija Fixko (tujina) ima svoj bundle; njeni iPhone žetoni imajo predpono »fixko:«.
+const FIXKO_BUNDLE_ID = process.env.FIXKO_APNS_TOPIC || "com.remako.fixko";
 const PRODUCT_ID = process.env.PRODUCT_ID || "si.fixko.app.mojster.mesecno";
 const PREIZKUS_DNI = 30;
 // Zaenkrat je Popravko brezplačen za vse mojstre (BREZPLACNO=0 vklopi naročnino).
@@ -39,7 +41,7 @@ function apnsJwt() {
 }
 // iPhone žetoni (64 hex znakov) gredo na APNs, Android žetoni na Firebase Cloud Messaging.
 // Rezultat: [{ token, status }], status 410 = žeton ne velja več (pobrišemo ga).
-const jeApns = (t) => /^[0-9a-f]{64}$/i.test(t);
+const jeApns = (t) => /^(fixko:)?[0-9a-f]{64}$/i.test(t);
 async function sendApns(tokens, title, body, data = {}) {
   tokens = [...new Set(tokens.filter(Boolean))];
   const [a, f] = await Promise.all([apns(tokens.filter(jeApns), title, body, data), fcm(tokens.filter((t) => !jeApns(t)), title, body, data)]);
@@ -69,8 +71,8 @@ function apns(tokens, title, body, data = {}) {
   const payload = JSON.stringify({ aps: { alert: { title, body }, sound: "default" }, ...data });
   const one = (token) => new Promise((resolve) => {
     const req = client.request({
-      ":method": "POST", ":path": "/3/device/" + token,
-      authorization: "bearer " + jwt, "apns-topic": BUNDLE_ID, "apns-push-type": "alert", "apns-priority": "10"
+      ":method": "POST", ":path": "/3/device/" + token.replace(/^fixko:/, ""),
+      authorization: "bearer " + jwt, "apns-topic": token.startsWith("fixko:") ? FIXKO_BUNDLE_ID : BUNDLE_ID, "apns-push-type": "alert", "apns-priority": "10"
     });
     let status = 0, out = "";
     req.on("response", (h) => { status = h[":status"]; });
@@ -613,7 +615,7 @@ exports.narocnina = onCall(async (req) => {
     console.warn("jws", uid, e.message);
     throw new HttpsError("invalid-argument", "Nakupa ni bilo mogoče preveriti.");
   }
-  if (t.bundleId !== BUNDLE_ID || t.productId !== PRODUCT_ID) throw new HttpsError("invalid-argument", "Napačen izdelek.");
+  if (![BUNDLE_ID, FIXKO_BUNDLE_ID].includes(t.bundleId) || t.productId !== PRODUCT_ID) throw new HttpsError("invalid-argument", "Napačen izdelek.");
   if (t.revocationDate) throw new HttpsError("permission-denied", "Naročnina je preklicana.");
   const doMs = Number(t.expiresDate);
   if (!(doMs > Date.now())) throw new HttpsError("permission-denied", "Naročnina je potekla.");

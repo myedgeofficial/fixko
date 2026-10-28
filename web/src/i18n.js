@@ -1,6 +1,7 @@
 // Jeziki: slovenščina je izvirnik (besedila v kodi so ključi), prevodi so v prevodi.js.
-// Zunaj slovenščine se aplikacija imenuje Fixko. Manjkajoč prevod vzame angleščino, nato slovenščino.
+// Manjkajoč prevod vzame angleščino, nato slovenščino. Ime aplikacije (Popravko ali Fixko) določa izdaja (izdaja.js).
 import { P, MN } from "./prevodi.js";
+import { FIXKO } from "./izdaja.js";
 
 export const JEZIKI = ["sl", "en", "de", "fr", "it", "es", "pt", "nl", "pl", "hr"];
 export const IMENA_JEZIKOV = { sl: "Slovenščina", en: "English", de: "Deutsch", fr: "Français", it: "Italiano", es: "Español", pt: "Português", nl: "Nederlands", pl: "Polski", hr: "Hrvatski" };
@@ -18,7 +19,8 @@ export function nastaviJezik(j) {
 }
 export const jz = () => jezik;
 export const jeSl = () => jezik === "sl";
-export const imeAplikacije = () => (jezik === "sl" ? "Popravko" : "Fixko");
+// Ime je vezano na aplikacijo, ne na jezik: Popravko je vedno Popravko, Fixko vedno Fixko.
+export const imeAplikacije = () => (FIXKO ? "Fixko" : "Popravko");
 
 // t("Mojster pride {0}", "jutri ob 8:00"): v slovenščini isto besedilo, sicer prevod.
 export function t(s, ...a) {

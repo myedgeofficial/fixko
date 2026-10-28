@@ -23,4 +23,5 @@ jobs:
           KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
           BUNDLE_ID: ${{ inputs.aplikacija == 'fixko' && 'com.remako.fixko' || vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
           IME: ${{ inputs.aplikacija == 'fixko' && 'Fixko' || 'Popravko' }}
+          APLIKACIJA: ${{ inputs.aplikacija }}
           AKCIJA: ${{ inputs.akcija }}
