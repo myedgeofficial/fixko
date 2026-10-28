@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
   <title>Popravko pregled</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/ikona-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Pregled">
+  <meta name="theme-color" content="#1F8A5B">
   <style>
     :root{--bg:#F4F6F5;--kartica:#fff;--tekst:#16201D;--siva:#5E6B66;--rob:rgba(0,0,0,.1);--zelena:#1F8A5B;--zelena-bg:#E3F4EB;--rumena:#9A6700;--rumena-bg:#FFF4D6;--rdeca:#B42318;--rdeca-bg:#FDE7E5;--modra:#1D5FD1}
     @media (prefers-color-scheme:dark){:root{--bg:#121816;--kartica:#1B2321;--tekst:#E7EDEA;--siva:#9AA8A2;--rob:rgba(255,255,255,.12);--zelena:#4CC38A;--zelena-bg:#173528;--rumena:#E6B54A;--rumena-bg:#3A3018;--rdeca:#F97066;--rdeca-bg:#3D1C1A;--modra:#7AA7FF}}
@@ -36,6 +41,7 @@
     .nakazilo{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--bg)}
     .desno{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
     .err{color:var(--rdeca);margin:8px 0}
+    .m.poudarek{border:2px solid var(--zelena);box-shadow:0 0 0 4px var(--zelena-bg)}
     .stat{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
     .tile{background:var(--kartica);border:1px solid var(--rob);border-radius:14px;padding:12px 14px}
     .tile .st{font-size:26px;font-weight:700;line-height:1.1}
@@ -69,7 +75,16 @@
   <script>
     // Vsi mojstri in potrditev podjetja (nakazilo 0,01 €). Dostop: povezava v e-pošti (samo lastniški naslovi) ali koda skrbnika.
     firebase.initializeApp({ apiKey: "AIzaSyCi-g2V67UMyELMjG7fl0BxcqCuUaWRkx4", authDomain: "fixko-app.firebaseapp.com", projectId: "fixko-app", appId: "1:117276939392:web:9728005ec9450ac8c50265" });
-    const klic = firebase.app().functions("europe-west1").httpsCallable("skrbnik");
+    const klic0 = firebase.app().functions("europe-west1").httpsCallable("skrbnik", { timeout: 120000 });
+    // Skrivnost te naprave: lastnik jo potrdi s povezavo v e-pošti (tudi če jo odpre v drugem brskalniku, npr. Safari ob aplikaciji na začetnem zaslonu).
+    let naprava = "";
+    try { naprava = localStorage.getItem("pregled-naprava") || ""; if (!naprava) { naprava = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join(""); localStorage.setItem("pregled-naprava", naprava); } } catch (e) {}
+    const klic = (d) => klic0({ ...d, naprava });
+    const sha = async (t) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const samostojna = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    let poglejMojstra = new URLSearchParams(location.search).get("m") || "";
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch((e) => console.warn("sw", e));
     const el = document.getElementById("vsebina");
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const kdaj = (ms) => ms ? new Date(ms).toLocaleString("sl-SI", { dateStyle: "short", timeStyle: "short" }) : "–";
@@ -96,9 +111,10 @@
         if (!mail.includes("@")) return prijava("Vpiši e-naslov.");
         document.getElementById("ok").disabled = true;
         try {
-          await auth.sendSignInLinkToEmail(mail, { url: location.origin + "/", handleCodeInApp: true });
+          await auth.sendSignInLinkToEmail(mail, { url: location.origin + "/?par=" + (naprava ? await sha(naprava) : ""), handleCodeInApp: true });
           try { localStorage.setItem("pregled-mail", mail); } catch (e) {}
-          el.innerHTML = `<p><b>Povezava je poslana na ${esc(mail)}.</b></p><p class="siva">Odpri e-pošto (poglej tudi v vsiljeno pošto) in klikni povezavo. Prijava velja na tej napravi, dokler se ne odjaviš.</p>`;
+          el.innerHTML = `<p><b>Povezava je poslana na ${esc(mail)}.</b></p><p class="siva">Odpri e-pošto (poglej tudi v vsiljeno pošto) in klikni povezavo. Prijava velja na tej napravi, dokler se ne odjaviš.</p><p class="siva">Ko klikneš povezavo, se ta stran odpre sama (počakaj nekaj sekund).</p>`;
+          caka();
         } catch (e) { prijava(e.message); }
       };
       document.getElementById("ok").onclick = naprej;
@@ -107,8 +123,17 @@
       if (z) z.onclick = (e) => { e.preventDefault(); prijava("", true); };
       i.focus();
     }
+    // Po poslani povezavi preverjamo, ali je lastnik napravo potrdil (povezava odprta kjerkoli).
+    async function caka() {
+      if (!auth.currentUser) await auth.signInAnonymously().catch(() => {});
+      for (let i = 0; i < 200; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (!/Povezava je poslana/.test(el.textContent)) return;
+        try { await klic({ akcija: "ping" }); return nalozi(); } catch (e) {}
+      }
+    }
     async function odjava(napaka) {
-      koda = ""; try { localStorage.removeItem("skrbnik"); } catch (x) {}
+      koda = ""; naprava = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join(""); try { localStorage.removeItem("skrbnik"); localStorage.setItem("pregled-naprava", naprava); localStorage.removeItem("pregled-push"); } catch (x) {}
       await auth.signOut().catch(() => {});
       prijava(napaka);
     }
@@ -177,7 +202,40 @@
         </div>`;
     }
     const zavihki = () => `<div class="zavihki"><button data-p="mojstri" class="${pogled === "mojstri" ? "izbran" : ""}">Mojstri</button><button data-p="dela" class="${pogled === "dela" ? "izbran" : ""}">Dela</button></div>`;
+    function obvestila() {
+      if (!("Notification" in window) || !("PushManager" in window) || !("serviceWorker" in navigator)) {
+        return ios && !samostojna
+          ? `<div class="banka"><b>Obvestila na iPhonu:</b> v Safariju tapni <b>Deli</b> (kvadrat s puščico) → <b>Dodaj na začetni zaslon</b>. Nato odpri <b>Pregled</b> z začetnega zaslona in tapni <b>Vklopi obvestila</b>.</div>`
+          : `<div class="banka siva">Ta brskalnik ne podpira obvestil.</div>`;
+      }
+      let vklopljena = false;
+      try { vklopljena = localStorage.getItem("pregled-push") === "1"; } catch (e) {}
+      if (Notification.permission === "granted" && vklopljena) {
+        return `<div class="banka"><b>Obvestila:</b> <span class="znacka z-potrjen">vklopljena na tej napravi</span><span style="margin-left:auto"><button class="ghost" id="pushTest">Pošlji preizkus</button></span></div>`;
+      }
+      if (Notification.permission === "denied") return `<div class="banka"><b>Obvestila:</b> <span class="znacka z-zavrnjen">zavrnjena</span> <span class="siva">Dovoli jih v nastavitvah telefona ali brskalnika za to stran.</span></div>`;
+      return `<div class="banka"><b>Obvestila za nove mojstre</b><span style="margin-left:auto"><button id="pushVklopi">Vklopi obvestila</button></span></div>`;
+    }
+    async function vklopiObvestila(b) {
+      b.disabled = true;
+      try {
+        if (await Notification.requestPermission() !== "granted") throw new Error("Obvestila niso dovoljena.");
+        const reg = await navigator.serviceWorker.register("/sw.js");
+        await navigator.serviceWorker.ready;
+        const kljuc = (await klic({ koda, akcija: "push-kljuc" })).data.kljuc;
+        const raw = atob(kljuc.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - kljuc.length % 4) % 4));
+        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)) });
+        await klic({ koda, akcija: "push-naroci", sub: sub.toJSON() });
+        try { localStorage.setItem("pregled-push", "1"); } catch (e) {}
+        await klic({ koda, akcija: "push-test" });
+      } catch (e) { alert(e.message); }
+      izrisi();
+    }
     function skupno() {
+      const pv = document.getElementById("pushVklopi");
+      if (pv) pv.onclick = () => vklopiObvestila(pv);
+      const pt = document.getElementById("pushTest");
+      if (pt) pt.onclick = async () => { pt.disabled = true; try { const r = (await klic({ koda, akcija: "push-test" })).data; if (!r.poslano) alert("Ni naprav za obvestila. Tapni Vklopi obvestila znova."); } catch (e) { alert(e.message); } pt.disabled = false; };
       el.querySelectorAll("[data-p]").forEach((b) => b.onclick = () => { pogled = b.dataset.p; izrisi(); });
       document.getElementById("odjava").onclick = () => odjava();
     }
@@ -219,6 +277,14 @@
     }
     function izrisi() {
       if (pogled === "dela") return izrisiDela();
+      if (poglejMojstra && podatki && !podatki._skok) {
+        podatki._skok = true;
+        const m = podatki.mojstri.find((x) => x.uid === poglejMojstra);
+        if (m && filter !== "vsi" && !(filter === m.stanje || (filter === "ni" && (m.stanje === "ni" || m.stanje === "zavrnjen")))) filter = "vsi";
+        iskanje = "";
+        setTimeout(() => document.getElementById("m-" + poglejMojstra)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+        history.replaceState(null, "", "/");
+      }
       const vsi = podatki.mojstri;
       const st = { caka: 0, potrjen: 0, ni: 0, zavrnjen: 0 };
       vsi.forEach((m) => st[m.stanje]++);
@@ -226,10 +292,10 @@
       const vidni = vsi.filter((m) => (filter === "vsi" || (filter === "ni" ? m.stanje === "ni" || m.stanje === "zavrnjen" : m.stanje === filter))
         && (!q || [m.ime, m.firma, m.davcna, m.tel].join(" ").toLowerCase().includes(q)));
       const gumb = (k, t) => `<button data-f="${k}" class="${filter === k ? "izbran" : ""}">${t}</button>`;
-      el.innerHTML = `${statistika()}${zavihki()}<div class="banka">${banka(podatki.banka)}</div>
+      el.innerHTML = `${obvestila()}${statistika()}${zavihki()}<div class="banka">${banka(podatki.banka)}</div>
         <div class="filtri">${gumb("caka", `Čaka (${st.caka})`)}${gumb("potrjen", `Potrjeni (${st.potrjen})`)}${gumb("ni", `Niso nakazali (${st.ni + st.zavrnjen})`)}${gumb("vsi", `Vsi (${vsi.length})`)}
           <input id="isci" type="search" placeholder="Išči ime, podjetje, davčno" value="${esc(iskanje)}"></div>
-        ${vidni.length ? vidni.map((m) => `<div class="m">
+        ${vidni.length ? vidni.map((m) => `<div class="m${m.uid === poglejMojstra ? " poudarek" : ""}" id="m-${esc(m.uid)}">
           ${m.slika ? `<img src="${esc(m.slika)}" alt="" loading="lazy">` : `<img alt="">`}
           <div>
             <div class="ime">${esc(m.firma || "(brez podjetja)")} <span class="znacka z-${m.stanje}">${STANJE[m.stanje]}</span></div>
@@ -266,14 +332,26 @@
     }
     (async () => {
       if (auth.isSignInWithEmailLink(location.href)) {
+        const q = new URLSearchParams(location.search), cont = q.get("continueUrl");
+        let par = q.get("par") || "";
+        try { if (!par && cont) par = new URL(cont).searchParams.get("par") || ""; } catch (e) {}
         let mail = ""; try { mail = localStorage.getItem("pregled-mail") || ""; } catch (e) {}
         if (!mail) mail = prompt("Potrdi svoj e-naslov") || "";
         try { await auth.signInWithEmailLink(mail.trim(), location.href); } catch (e) { history.replaceState(null, "", "/"); return prijava(e.message); }
         history.replaceState(null, "", "/");
+        // Povezavo je zahtevala druga naprava (npr. Pregled na začetnem zaslonu): potrdimo jo.
+        if (/^[0-9a-f]{64}$/.test(par) && par !== (naprava ? await sha(naprava) : "")) {
+          try { await klic({ akcija: "pari", par }); } catch (e) { return prijava(e.message); }
+          el.innerHTML = `<p><b>Prijava potrjena ✓</b></p><p class="siva">Vrni se v aplikacijo <b>Pregled</b> na začetnem zaslonu, odprla se bo sama v nekaj sekundah. To okno lahko zapreš.</p>`;
+          return;
+        }
       }
       const u = await new Promise((ok) => { const s = auth.onAuthStateChanged((x) => { s(); ok(x); }); });
       if (u && u.email) return nalozi();
-      if (koda) { if (!u) await auth.signInAnonymously(); return nalozi(); }
+      if (koda || naprava) {
+        if (!u) await auth.signInAnonymously();
+        try { await klic({ koda, akcija: "ping" }); return nalozi(); } catch (e) {}
+      }
       prijava();
     })().catch((e) => { el.innerHTML = `<div class="err">${esc(e.message)}</div>`; });
   </script>
