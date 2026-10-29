@@ -95,8 +95,13 @@ if AKCIJA == "zamenjaj":
         ver = next((v for v in verzije if v["attributes"]["appStoreState"] in ("PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED")), None)
         if ver: break
         time.sleep(10)
-    bl = [b for b in get("/builds", **{"filter[app]": AID, "sort": "-uploadedDate", "limit": 5, "include": "preReleaseVersion"})["data"]
-          if b["attributes"]["processingState"] == "VALID" and not b["attributes"].get("expired")]
+    # počakamo, da Apple obdela build, novejši od pripetega (do 15 min)
+    star = ((get(f"/appStoreVersions/{ver['id']}/build").get("data") or {}).get("attributes") or {}).get("version", "0") if ver else "0"
+    for i in range(90):
+        bl = [b for b in get("/builds", **{"filter[app]": AID, "sort": "-uploadedDate", "limit": 5})["data"]
+              if b["attributes"]["processingState"] == "VALID" and not b["attributes"].get("expired") and b["attributes"]["version"] > star]
+        if bl or not ver: break
+        time.sleep(10)
     if not ver or not bl:
         print("::error::Ni verzije v pripravi ali veljavnega builda"); sys.exit(1)
     st = (get(f"/builds/{bl[0]['id']}/preReleaseVersion").get("data") or {}).get("attributes", {}).get("version")
@@ -104,6 +109,20 @@ if AKCIJA == "zamenjaj":
     if st and st != ver["attributes"]["versionString"]:
         poslji("PATCH", f"/appStoreVersions/{ver['id']}", {"type": "appStoreVersions", "id": ver["id"], "attributes": {"versionString": st}})
     json_poslji("PATCH", f"/appStoreVersions/{ver['id']}/relationships/build", {"data": {"type": "builds", "id": bl[0]["id"]}})
+    # aplikacija ima oglase: starostna ocena, javni kontakt in zasebnost na remako.si
+    B0 = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/" + ("fixko.json" if os.environ.get("APLIKACIJA") == "fixko" else "besedila.json"))))
+    infos = get(f"/apps/{AID}/appInfos")["data"]
+    info = next((i for i in infos if (i["attributes"].get("appStoreState") or i["attributes"].get("state")) not in ("READY_FOR_SALE", "READY_FOR_DISTRIBUTION")), infos[0])
+    age = get(f"/appInfos/{info['id']}/ageRatingDeclaration").get("data")
+    if age and not age["attributes"].get("advertising"):
+        poslji("PATCH", f"/ageRatingDeclarations/{age['id']}", {"type": "ageRatingDeclarations", "id": age["id"], "attributes": {"advertising": True}})
+    if B0.get("zasebnost"):
+        for l in get(f"/appInfos/{info['id']}/appInfoLocalizations")["data"]:
+            if l["attributes"].get("privacyPolicyUrl") != B0["zasebnost"]:
+                poslji("PATCH", f"/appInfoLocalizations/{l['id']}", {"type": "appInfoLocalizations", "id": l["id"], "attributes": {"privacyPolicyUrl": B0["zasebnost"]}})
+    rd = get(f"/appStoreVersions/{ver['id']}/appStoreReviewDetail").get("data")
+    if rd and rd["attributes"].get("contactEmail") != "support@remako.si":
+        poslji("PATCH", f"/appStoreReviewDetails/{rd['id']}", {"type": "appStoreReviewDetails", "id": rd["id"], "attributes": {"contactEmail": "support@remako.si"}})
 
 # Besedila: Popravko (appstore/besedila.json, samo slovensko) ali Fixko (appstore/fixko.json, tuji jeziki).
 B = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/" + ("fixko.json" if os.environ.get("APLIKACIJA") == "fixko" else "besedila.json"))))
