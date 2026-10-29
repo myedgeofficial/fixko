@@ -1,21 +1,33 @@
-// Oglasi (AdMob, REMAKO): pasica na dnu in oglas čez cel zaslon ob vsakem 3. odprtju.
-// Zaenkrat samo Android; iPhone dobi oglase v posodobitvi 1.1.
+// Oglasi (AdMob, REMAKO): pasica na dnu in oglas čez cel zaslon ob vsakem 3. odprtju (Android in iPhone).
 import { Capacitor } from "@capacitor/core";
 import { AdMob, BannerAdSize, BannerAdPosition, BannerAdPluginEvents, InterstitialAdPluginEvents } from "@capacitor-community/admob";
+import { FIXKO } from "./izdaja.js";
 
-const android = Capacitor.getPlatform() === "android";
-export const oglasiVklopljeni = android;
-
-// ID-ji oglasnih enot (REMAKO AdMob).
-const PASICA = window.POPRAVKO_PASICA || "ca-app-pub-2170388618811750/6926831924";
-const CEZ_ZASLON = window.POPRAVKO_CEZ_ZASLON || "ca-app-pub-2170388618811750/1670635819";
+// ID-ji oglasnih enot (REMAKO AdMob), ločeno za vsako aplikacijo in platformo.
+const ENOTE = {
+  popravko: {
+    android: { pasica: "ca-app-pub-2170388618811750/6926831924", cezZaslon: "ca-app-pub-2170388618811750/1670635819" },
+    ios: { pasica: "ca-app-pub-2170388618811750/7283809167", cezZaslon: "ca-app-pub-2170388618811750/7522562449" }
+  },
+  fixko: {
+    android: { pasica: "ca-app-pub-2170388618811750/9748779268", cezZaslon: "ca-app-pub-2170388618811750/6081444109" },
+    ios: { pasica: "ca-app-pub-2170388618811750/4403072912", cezZaslon: "ca-app-pub-2170388618811750/1776909578" }
+  }
+};
+const enote = ENOTE[FIXKO ? "fixko" : "popravko"][Capacitor.getPlatform()] || null;
+export const oglasiVklopljeni = !!enote;
+const PASICA = window.POPRAVKO_PASICA || enote?.pasica;
+const CEZ_ZASLON = window.POPRAVKO_CEZ_ZASLON || enote?.cezZaslon;
 
 // Odprtje = zagon ali vrnitev v aplikacijo po 3+ minutah. Prvi dan po namestitvi oglasa čez cel zaslon ni.
 const KLJUC = "popravko-odprtja", ODSOTNOST = 3 * 60 * 1000, VSAKO = 3, PO_ODPRTJU = 4000, PRVI_DAN = 24 * 3600 * 1000;
 
 let zagon = null, pasica = false, zasebnost = false;
 const visina = (h) => {
-  document.documentElement.style.setProperty("--oglas", (h > 0 ? Math.round(h) : 0) + "px");
+  const px = (h > 0 ? Math.round(h) : 0) + "px";
+  document.documentElement.style.setProperty("--oglas", px);
+  // iPhone: pasica stoji nad črto za domov, zato se okna končajo nad obojim.
+  document.documentElement.style.setProperty("--oglas-dno", h > 0 && Capacitor.getPlatform() === "ios" ? `calc(${px} + env(safe-area-inset-bottom,0px))` : px);
   document.body.classList.toggle("z-oglasom", h > 0);
 };
 
