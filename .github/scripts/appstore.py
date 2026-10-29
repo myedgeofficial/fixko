@@ -95,11 +95,11 @@ if AKCIJA == "zamenjaj":
         ver = next((v for v in verzije if v["attributes"]["appStoreState"] in ("PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED")), None)
         if ver: break
         time.sleep(10)
-    # počakamo, da Apple obdela build, novejši od pripetega (do 15 min)
-    star = ((get(f"/appStoreVersions/{ver['id']}/build").get("data") or {}).get("attributes") or {}).get("version", "0") if ver else "0"
+    # počakamo, da Apple obdela build z verzijo iz projekta (MARKETING_VERSION), do 15 min
+    cilj = re.search(r"MARKETING_VERSION = ([\d.]+);", open(os.path.join(os.path.dirname(__file__), "../../app/ios/App/App.xcodeproj/project.pbxproj")).read()).group(1)
     for i in range(90):
-        bl = [b for b in get("/builds", **{"filter[app]": AID, "sort": "-uploadedDate", "limit": 5})["data"]
-              if b["attributes"]["processingState"] == "VALID" and not b["attributes"].get("expired") and b["attributes"]["version"] > star]
+        bl = [b for b in get("/builds", **{"filter[app]": AID, "filter[preReleaseVersion.version]": cilj, "sort": "-uploadedDate", "limit": 5})["data"]
+              if b["attributes"]["processingState"] == "VALID" and not b["attributes"].get("expired")]
         if bl or not ver: break
         time.sleep(10)
     if not ver or not bl:
