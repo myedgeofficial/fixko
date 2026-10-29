@@ -4,13 +4,15 @@ import { AdMob, BannerAdSize, BannerAdPosition, BannerAdPluginEvents, Interstiti
 import { FIXKO } from "./izdaja.js";
 
 // ID-ji oglasnih enot (REMAKO AdMob), ločeno za vsako aplikacijo in platformo.
-// Fixko dobi svoje enote v AdMob; dokler jih ni, Fixko oglasov ne kaže (ne smejo iti na Popravko).
 const ENOTE = {
   popravko: {
     android: { pasica: "ca-app-pub-2170388618811750/6926831924", cezZaslon: "ca-app-pub-2170388618811750/1670635819" },
     ios: { pasica: "ca-app-pub-2170388618811750/7283809167", cezZaslon: "ca-app-pub-2170388618811750/7522562449" }
   },
-  fixko: { android: null, ios: null }
+  fixko: {
+    android: { pasica: "ca-app-pub-2170388618811750/9748779268", cezZaslon: "ca-app-pub-2170388618811750/6081444109" },
+    ios: { pasica: "ca-app-pub-2170388618811750/4403072912", cezZaslon: "ca-app-pub-2170388618811750/1776909578" }
+  }
 };
 const enote = ENOTE[FIXKO ? "fixko" : "popravko"][Capacitor.getPlatform()] || null;
 export const oglasiVklopljeni = !!enote;

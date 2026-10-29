@@ -34,6 +34,8 @@ jobs:
       FIXKO_VERSION_CODE: ${{ github.run_number }}
       FIXKO_IZDAJA: ${{ matrix.izdaja }}
       FIXKO_APP_ID: ${{ matrix.izdaja == 'fixko' && 'com.remako.fixko' || 'si.fixko.app' }}
+      # AdMob aplikacija (REMAKO): Fixko ima svojo, Popravko privzeto iz build.gradle.
+      FIXKO_ADMOB_APP_ID: ${{ matrix.izdaja == 'fixko' && 'ca-app-pub-2170388618811750~4109886883' || '' }}
     steps:
       - uses: actions/checkout@v4
 

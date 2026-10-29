@@ -27,7 +27,9 @@ const ime = izdaja === "fixko" ? "Fixko" : "Popravko";
 const iosApp = path.resolve(__dirname, "..", "ios", "App", "App");
 for (const f of [path.join(iosApp, "Info.plist"), ...fs.readdirSync(iosApp).filter((d) => d.endsWith(".lproj")).map((d) => path.join(iosApp, d, "InfoPlist.strings"))]) {
   if (!fs.existsSync(f)) continue;
-  const prej = fs.readFileSync(f, "utf8"), zdaj = prej.replace(/\b(Popravko|Fixko)\b/g, ime);
+  // AdMob aplikacija za iPhone: vsaka izdaja ima svojo (REMAKO).
+  const admobIos = izdaja === "fixko" ? "ca-app-pub-2170388618811750~8435697599" : "ca-app-pub-2170388618811750~9574930586";
+  const prej = fs.readFileSync(f, "utf8"), zdaj = prej.replace(/\b(Popravko|Fixko)\b/g, ime).replace(/ca-app-pub-2170388618811750~\d+/g, admobIos);
   if (zdaj !== prej) fs.writeFileSync(f, zdaj);
 }
 // Android: ime aplikacije (package_name in shema ostaneta).
