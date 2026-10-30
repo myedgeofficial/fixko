@@ -57,7 +57,7 @@ const cisto = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").to
 // Splošne besede ne štejejo; ujemati se morata vsaj dve pomembni besedi (ali edina, če ima ime samo eno).
 const SPLOSNE = new Set("storitve storitev servis instalacije inst gradnje gradbenistvo gradbeni gradbena trgovina podjetje druzba inzeniring montaza montaze vodovod elektro zakljucna dela obrt obrtnik the and sistemi tehnika team group".split(" "));
 // Tuja podjetja (drzava ≠ SI): odstranimo še tuje pravne oblike in pogoste splošne besede; slovensko ujemanje ostane, kot je.
-const TUJE_OBLIKE = /b(gmbh|ag|kg|ohg|ug|e\s*k|e\s*u|ltd|limited|llc|inc|plc|llp|sarl|sas|sasu|eurl|sa|srl|s\s*r\s*l|spa|s\s*p\s*a|snc|sas|sl|s\s*l|slu|bv|b\s*v|nv|n\s*v|vof|bvba|sprl|lda|unipessoal|sp\s*z\s*o\s*o|sp\s*j|j\s*d\s*o\s*o|obrt|zoo|s\s*r\s*o|kft|bt|zrt|ab|as|oy|aps)b\.?/g;
+const TUJE_OBLIKE = /\b(gmbh|ag|kg|ohg|ug|e\s*k|e\s*u|ltd|limited|llc|inc|plc|llp|sarl|sas|sasu|eurl|sa|srl|s\s*r\s*l|spa|s\s*p\s*a|snc|sas|sl|s\s*l|slu|bv|b\s*v|nv|n\s*v|vof|bvba|sprl|lda|unipessoal|sp\s*z\s*o\s*o|sp\s*j|j\s*d\s*o\s*o|obrt|zoo|s\s*r\s*o|kft|bt|zrt|ab|as|oy|aps)\b\.?/g;
 const TUJE_SPLOSNE = new Set("bau bauunternehmen haustechnik sanitar heizung elektrotechnik malerbetrieb handwerk service services building construction plumbing electrical solutions company group home homes renovation renovations batiment travaux plomberie impianti edilizia costruzioni servizi construcciones reformas instalaciones servicios construcoes servicos bouw installatie installaties techniek usługi uslugi budownictwo instalacje gradnja usluge".split(" "));
 function ujema(placnik, firma, drzava) {
   const tuje = !!drzava && drzava !== "SI";
@@ -91,7 +91,7 @@ async function preglej(potrdi) {
     .map((k) => (k.sklic ? k : { ...k, sklic: k.tuj, samoTuji: true })).filter((k) => k.sklic && !obdelani.has(k.id));
   const rezultat = [];
   if (kandidati.length) {
-    const mojstri = await db().collection("mojstri").select("firma", "davcna", "preverjeno", "push", "drzava", "jezik").get();
+    const mojstri = await db().collection("mojstri").select("firma", "davcna", "preverjeno", "preverjanje", "ocena", "push", "drzava", "jezik").get();
     const poSklicu = new Map(mojstri.docs.map((d) => [sklicIz(d.id), d]));
     for (const k of kandidati) {
       const d = poSklicu.get(k.sklic);
@@ -102,12 +102,15 @@ async function preglej(potrdi) {
       if (!d) { rezultat.push({ sklic: k.sklic, izid: "ni mojstra", placnik, iban }); continue; }
       const m = d.data(), o = { sklic: k.sklic, placnik, iban, uid: d.id, firma: m.firma || "", davcna: m.davcna || "" };
       if (m.preverjeno && m.preverjeno.davcna === (m.davcna || "")) { rezultat.push({ ...o, izid: "že potrjen" }); continue; }
-      if (ujema(placnik, m.firma, m.drzava)) {
+      // Tuji mojster: plačnik se mora ujemati z imenom s potrdila in iz registra (dokumentPodjetja), ne samo s profilom.
+      const tuj = !!m.drzava && m.drzava !== "SI";
+      const ocena = m.ocena && m.ocena.firma === (m.firma || "") ? m.ocena : null;
+      if (tuj ? !!(ocena?.ok && ocena.ime && ujema(placnik, ocena.ime, m.drzava)) : ujema(placnik, m.firma, m.drzava)) {
         await potrdi(d.ref, m, { samodejno: true, placnik, iban });
         rezultat.push({ ...o, izid: "potrjen" });
       } else {
-        // Ime se ne ujema: ostane skrbniku, ki vidi ime plačnika.
-        await d.ref.update({ preverjanje: { cakam: true, sklic: k.sklic, davcna: m.davcna || "", placnik, iban, ob: FieldValue.serverTimestamp() } });
+        // Ime se ne ujema (ali tuj mojster še nima potrdila): ostane skrbniku, ki vidi ime plačnika.
+        await d.ref.update({ preverjanje: { cakam: true, ...(m.preverjanje?.nacin ? { nacin: m.preverjanje.nacin } : {}), sklic: k.sklic, davcna: m.davcna || "", placnik, iban, ob: FieldValue.serverTimestamp() } });
         rezultat.push({ ...o, izid: "ročno" });
       }
     }
