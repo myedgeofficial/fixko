@@ -724,9 +724,12 @@ async function pushSkrbniku(naslov, besedilo, pot = "/") {
   return ok;
 }
 // Mojster čaka na potrditev: obvestilo na telefon skrbnika (in e-pošta, ki pride vedno).
+// Fixko je za tujino (Slovenije nima), zato ima njegov mojster vedno tujo državo; Popravko je samo za Slovenijo.
+const aplikacijaMojstra = (m) => (m.drzava && m.drzava !== "SI" ? "Fixko" : "Popravko");
+
 async function obvestiOMojstru(uid, m, dogodek, nakazilo) {
   const kje = [(m.stroke || []).map(strokaIme).join(", "), (m.regije || []).join(", ")].filter(Boolean).join(" · ");
-  await pushSkrbniku(dogodek + ": " + (m.firma || m.ime || "mojster"), [m.ime, kje, "0,01 €: " + nakazilo].filter(Boolean).join("\n"), "/?popravko=" + encodeURIComponent(uid))
+  await pushSkrbniku(aplikacijaMojstra(m) + " · " + dogodek + ": " + (m.firma || m.ime || "mojster"), [m.ime, kje, "0,01 €: " + nakazilo].filter(Boolean).join("\n"), "/?popravko=" + encodeURIComponent(uid))
     .catch((e) => console.warn("pushSkrbniku", e.message));
 }
 
@@ -759,7 +762,7 @@ exports.novMojster = onDocumentCreated({ document: "mojstri/{uid}", secrets: ["M
   const m = event.data?.data();
   if (!m) return;
   await obvestiOMojstru(event.params.uid, m, "Nov mojster", "še ni nakazano");
-  await mod.posljiSkrbniku("Popravko: nov mojster " + (m.firma || m.ime || ""),
+  await mod.posljiSkrbniku(aplikacijaMojstra(m) + ": nov mojster " + (m.firma || m.ime || ""),
     `${m.ime || ""}
 Podjetje: ${m.firma || "-"}
 Davčna: ${m.davcna || "-"}
@@ -870,7 +873,7 @@ async function skrbnikAkcija(req) {
       const m = d.data(), p = m.preverjanje || {}, v = m.preverjeno;
       const potrjen = !!v && v.davcna === (m.davcna || "");
       return {
-        uid: d.id, ime: m.ime || "", firma: m.firma || "", davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "",
+        uid: d.id, aplikacija: aplikacijaMojstra(m), ime: m.ime || "", firma: m.firma || "", davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "",
         stroke: (m.stroke || []).map(strokaIme), regije: m.regije || [], ustvarjen: ms(d.createTime), posodobljen: ms(m.posodobljeno),
         narocninaDo: ms(m.narocninaDo), preizkus: !!m.preizkusPorabljen, transakcija: !!m.transakcija, testni: testnaFirma(m.firma),
         stanje: potrjen ? "potrjen" : p.cakam ? "caka" : p.zavrnjeno ? "zavrnjen" : "ni",
