@@ -12,6 +12,9 @@ on:
       zunanji:
         description: "1 = zunanji testerji (Applov pregled, javna povezava)"
         default: "0"
+      bundle:
+        description: "Aplikacija: si.fixko.app (Popravko) ali com.remako.fixko (Fixko)"
+        default: ""
 
 jobs:
   testerji:
@@ -24,7 +27,7 @@ jobs:
           KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
-          BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
+          BUNDLE_ID: ${{ inputs.bundle || vars.IOS_BUNDLE_ID || 'si.fixko.app' }}
           EMAILS: ${{ inputs.emails || 'teo.simonic7@gmail.com' }}
           ZUNANJI: ${{ inputs.zunanji || '0' }}
           ZASEBNOST_URL: https://remako.si/popravko/zasebnost.html
