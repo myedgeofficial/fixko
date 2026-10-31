@@ -217,6 +217,10 @@ if AKCIJA == "slike":
                 requests.request(op["method"], op["url"], data=kos, headers={h["name"]: h["value"] for h in op["requestHeaders"]}, timeout=120).raise_for_status()
             poslji("PATCH", f"/appScreenshots/{sc['id']}", {"type": "appScreenshots", "id": sc["id"], "attributes": {"uploaded": True, "sourceFileChecksum": hashlib.md5(podatki).hexdigest()}})
         time.sleep(10)
+        # vrstni red po imenu datoteke (1, 2, 3 ...)
+        zdaj = sorted(get(f"/appScreenshotSets/{s['id']}/appScreenshots")["data"], key=lambda x: x["attributes"]["fileName"])
+        requests.patch(f"{API}/appScreenshotSets/{s['id']}/relationships/appScreenshots", headers=H, timeout=60,
+                       json={"data": [{"type": "appScreenshots", "id": x["id"]} for x in zdaj]})
         for x in get(f"/appScreenshotSets/{s['id']}/appScreenshots")["data"]:
             print("SLIKA", x["attributes"]["fileName"], json.dumps(x["attributes"].get("assetDeliveryState")))
 
