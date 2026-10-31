@@ -1,4 +1,4 @@
-"""Priprava oddaje v App Store prek App Store Connect API. AKCIJA: stanje | vpisi | slike | oddaj | drzave
+"""Priprava oddaje v App Store prek App Store Connect API. AKCIJA: stanje | vpisi | slike | oddaj | drzave | zamenjaj
 vpisi: besedila iz appstore/besedila.json za vse jezike (sl Popravko, drugje Fixko). drzave: aplikacija na voljo v vseh državah."""
 import os, re, json, textwrap, time, sys, hashlib, glob
 import jwt, requests
@@ -83,6 +83,46 @@ def json_poslji(metoda, pot, telo):
     print(("" if ok else "::error::") + f"{metoda} {pot}: {r.status_code} {'' if ok else ' '.join(r.text.split())[:800]}")
     return r.json() if ok and r.text else {}
 
+
+# Zamenjaj build: oddajo, ki še čaka na pregled, umakni, verziji nastavi številko zadnjega builda in ga pripni.
+# Oddaja sledi posebej (akcija oddaj), ko je App Privacy urejen.
+if AKCIJA == "zamenjaj":
+    for s in get(f"/apps/{AID}/reviewSubmissions", **{"filter[platform]": "IOS"})["data"]:
+        if s["attributes"].get("state") in ("WAITING_FOR_REVIEW", "READY_FOR_REVIEW"):
+            poslji("PATCH", f"/reviewSubmissions/{s['id']}", {"type": "reviewSubmissions", "id": s["id"], "attributes": {"canceled": True}})
+    for i in range(12):
+        verzije = get(f"/apps/{AID}/appStoreVersions", **{"filter[platform]": "IOS"})["data"]
+        ver = next((v for v in verzije if v["attributes"]["appStoreState"] in ("PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED")), None)
+        if ver: break
+        time.sleep(10)
+    # počakamo, da Apple obdela build z verzijo iz projekta (MARKETING_VERSION), do 15 min
+    cilj = re.search(r"MARKETING_VERSION = ([\d.]+);", open(os.path.join(os.path.dirname(__file__), "../../app/ios/App/App.xcodeproj/project.pbxproj")).read()).group(1)
+    for i in range(90):
+        bl = [b for b in get("/builds", **{"filter[app]": AID, "filter[preReleaseVersion.version]": cilj, "sort": "-uploadedDate", "limit": 5})["data"]
+              if b["attributes"]["processingState"] == "VALID" and not b["attributes"].get("expired")]
+        if bl or not ver: break
+        time.sleep(10)
+    if not ver or not bl:
+        print("::error::Ni verzije v pripravi ali veljavnega builda"); sys.exit(1)
+    st = (get(f"/builds/{bl[0]['id']}/preReleaseVersion").get("data") or {}).get("attributes", {}).get("version")
+    print("VERZIJA", ver["attributes"]["versionString"], "->", st, "BUILD", bl[0]["attributes"]["version"])
+    if st and st != ver["attributes"]["versionString"]:
+        poslji("PATCH", f"/appStoreVersions/{ver['id']}", {"type": "appStoreVersions", "id": ver["id"], "attributes": {"versionString": st}})
+    json_poslji("PATCH", f"/appStoreVersions/{ver['id']}/relationships/build", {"data": {"type": "builds", "id": bl[0]["id"]}})
+    # aplikacija ima oglase: starostna ocena, javni kontakt in zasebnost na remako.si
+    B0 = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/" + ("fixko.json" if os.environ.get("APLIKACIJA") == "fixko" else "besedila.json"))))
+    infos = get(f"/apps/{AID}/appInfos")["data"]
+    info = next((i for i in infos if (i["attributes"].get("appStoreState") or i["attributes"].get("state")) not in ("READY_FOR_SALE", "READY_FOR_DISTRIBUTION")), infos[0])
+    age = get(f"/appInfos/{info['id']}/ageRatingDeclaration").get("data")
+    if age and not age["attributes"].get("advertising"):
+        poslji("PATCH", f"/ageRatingDeclarations/{age['id']}", {"type": "ageRatingDeclarations", "id": age["id"], "attributes": {"advertising": True}})
+    if B0.get("zasebnost"):
+        for l in get(f"/appInfos/{info['id']}/appInfoLocalizations")["data"]:
+            if l["attributes"].get("privacyPolicyUrl") != B0["zasebnost"]:
+                poslji("PATCH", f"/appInfoLocalizations/{l['id']}", {"type": "appInfoLocalizations", "id": l["id"], "attributes": {"privacyPolicyUrl": B0["zasebnost"]}})
+    rd = get(f"/appStoreVersions/{ver['id']}/appStoreReviewDetail").get("data")
+    if rd and rd["attributes"].get("contactEmail") != "support@remako.si":
+        poslji("PATCH", f"/appStoreReviewDetails/{rd['id']}", {"type": "appStoreReviewDetails", "id": rd["id"], "attributes": {"contactEmail": "support@remako.si"}})
 
 # Besedila: Popravko (appstore/besedila.json, samo slovensko) ali Fixko (appstore/fixko.json, tuji jeziki).
 B = json.load(open(os.path.join(os.path.dirname(__file__), "../../appstore/" + ("fixko.json" if os.environ.get("APLIKACIJA") == "fixko" else "besedila.json"))))
