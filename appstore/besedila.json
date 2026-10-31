@@ -2,7 +2,7 @@
   "zasebnost": "https://remako.si/popravko/zasebnost.html",
   "podpora": "https://remako.si/popravko/",
   "copyright": "2026 REMAKO d.o.o.",
-  "verzija": "1.2",
+  "verzija": "1.2.2",
   "drzave": "SVN",
   "opombe": "Popravko connects people in Slovenia who need a home repair with local contractors. No login is needed (anonymous account). The app is free; there are no in-app purchases.\n\nCUSTOMER SIDE: tap 'Rabim mojstra', add a photo and a short description, choose trade, town, time and budget, enter a phone number and tap 'Pošlji mojstrom'. Contractors in that region get a notification and send an offer with a date; the customer accepts one and sees the contractor's name, company and phone.\n\nCONTRACTOR SIDE: tap 'Sem mojster' (top switch) and fill in the profile. Real contractors must prove they own the company with a 0.01 EUR bank transfer from the company account, which a reviewer cannot do. FOR REVIEW please enter the company name 'Sraufnciger' (test company): it skips the tax number and the transfer check. Tip: post a job as a customer first, then switch to 'Sem mojster' with region and trade matching that job to see it under 'Prosta dela' and tap 'Javi se'.\n\nUSER CONTENT: every job post has a '•••' menu to report or hide it, and 'Prijavi mojstra' reports a contractor. Reports are reviewed within 24 hours. Account and data deletion: gear icon (Nastavitve) > 'Izbriši moje podatke'.\n\nLocation is used once, only to fill in the user's town. Calendar/Reminders access is used only when the contractor taps 'Dodaj v koledar in opomnike'. The app shows Google AdMob ads.",
   "jeziki": {
@@ -13,7 +13,7 @@
       "promo": "Slikaj, kaj je treba popraviti, in mojstri v bližini se javijo s terminom. Za stranke brezplačno.",
       "opis": "Popravko poveže ljudi, ki rabijo popravilo doma, z mojstri v njihovi bližini.\n\nZA STRANKE, BREZPLAČNO\n• Slikaj, kaj je treba popraviti, in na kratko opiši.\n• Izberi, kdaj in okvirno koliko.\n• Mojstri v tvoji bližini dobijo obvestilo in se javijo s terminom.\n• Izbereš mojstra, on te pokliče in pride.\nBrez registracije in brez obrazcev.\n\nZA MOJSTRE\n• Nova dela v tvoji regiji in stroki, takoj ko jih nekdo objavi.\n• Javiš se s terminom in okvirno ceno.\n• Ko te stranka izbere, dobiš njen telefon.\n• Termin dodaš v koledar in opomnike z enim dotikom.\n\nPREVERJENA PODJETJA\nMojstri so registrirani samostojni podjetniki ali podjetja. Vsako podjetje potrdimo z nakazilom 1 centa z računa podjetja, zato veš, kdo prihaja k tebi.\n\nVodovodarji, električarji, keramičarji, pleskarji, talne obloge (laminat, parket), zidarji in fasade, mizarji, okna, vrata in senčila, gospodinjski aparati, krovci, vrtnarji, ogrevanje in klima, montaža pohištva, čiščenje, selitve in prevozi. Po vsej Sloveniji.\n\nPopravko je storitev podjetja REMAKO d.o.o.",
       "zasebnost": "https://remako.si/popravko/zasebnost.html",
-      "novo": "Popravljene reklame in manjše izboljšave."
+      "novo": "Nove slike in manjše izboljšave."
     }
   }
 }
