@@ -60,7 +60,10 @@ async function loadPrefs() {
     nastaviJezik("sl");
   } else {
     // Fixko: država iz časovnega pasu (ali izbrana), jezik države, sicer jezik telefona (ali izbran).
-    if (!prefs.drzava) { prefs.drzava = zaznajDrzavo(jeziki, Intl.DateTimeFormat().resolvedOptions().timeZone || ""); savePrefs(); }
+    const zdaj = zaznajDrzavo(jeziki, Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+    if (!prefs.drzava) { prefs.drzava = zdaj; prefs.vprasano = zdaj; savePrefs(); }
+    // Telefon je v drugi državi (potovanje): enkrat vprašamo, ali preklopimo; sami ne preklopimo.
+    else if (zdaj !== prefs.drzava && zdaj !== prefs.vprasano) S.novaDrzava = zdaj;
     nastaviJezik(prefs.jezik || jezikDrzave(prefs.drzava) || jezikNaprave(jeziki));
   }
   prevediStran();
@@ -1151,6 +1154,26 @@ function preveriTujeSheet(nacin) {
     e.target.value = "";
   };
 }
+// Fixko zazna drugo državo kot v nastavitvah: enkrat vpraša, ali preklopi (država, regija, kraj in samodejni jezik).
+function vprasajDrzavo() {
+  const nova = S.novaDrzava, stara = drzava();
+  S.novaDrzava = "";
+  if (!nova || nova === stara) return;
+  prefs.vprasano = nova; savePrefs();
+  const d = document.createElement("div"); d.className = "sheet";
+  d.innerHTML = `<div role="dialog" aria-label="${t("Nova država")}"><h2 style="margin-top:0">${t("Nova država")}</h2>
+    <p class="lead">${t("Telefon je zdaj v drugi državi. Preklopim Fixko na {0}?", `<b>${esc(imeDrzave(nova))}</b>`)}</p>
+    <button class="btn" type="button" id="da">${t("Preklopi na {0}", esc(imeDrzave(nova)))}</button>
+    <button class="btn ghost" type="button" id="ne">${t("Ostani: {0}", esc(imeDrzave(stara)))}</button></div>`;
+  document.body.appendChild(d);
+  const zapri = () => d.remove();
+  d.onclick = (e) => { if (e.target === d) zapri(); };
+  d.querySelector("#ne").onclick = zapri;
+  d.querySelector("#da").onclick = () => {
+    prefs.drzava = nova; prefs.regija = ""; prefs.kraj = ""; prefs.krajRocno = false;
+    Preferences.set({ key: "fixko", value: JSON.stringify(prefs) }).finally(() => location.reload());
+  };
+}
 // Skrbnik (Urška, Teo): seznam mojstrov, ki so nakazali; na izpisku preveri sklic in da je TRR podjetja s to davčno.
 async function skrbnikSheet() {
   const d = document.createElement("div"); d.className = "sheet";
@@ -1225,6 +1248,7 @@ function shrink(file, max = 1280) {
 (async function start() {
   await loadPrefs();
   zacniOglase();
+  if (S.novaDrzava) setTimeout(vprasajDrzavo, 900);
   // Lokacija ob vsaki uporabi (če je dovoljena in kraja niste vpisali sami).
   if (!prefs.krajRocno) najdiLokacijo(false);
   if (!cfg) { render(); return; }
