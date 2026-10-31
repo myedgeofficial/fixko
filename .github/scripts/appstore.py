@@ -122,6 +122,7 @@ if AKCIJA == "vpisi":
         a = {k: ("NONE" if k not in ("advertising", "gambling", "healthOrWellnessTopics", "lootBox", "messagingAndChat", "parentalControls", "ageAssurance", "unrestrictedWebAccess", "userGeneratedContent", "socialMedia", "socialMediaAgeRestricted") else False)
              for k in age["attributes"] if not k.startswith(("ageRatingOverride", "korea", "kidsAge", "gracRating", "developerAge"))}
         a["userGeneratedContent"] = True
+        a["advertising"] = True  # aplikacija kaže reklame AdMob
         poslji("PATCH", f"/ageRatingDeclarations/{age['id']}", {"type": "ageRatingDeclarations", "id": age["id"], "attributes": a})
     poslji("PATCH", f"/apps/{AID}", {"type": "apps", "id": AID, "attributes": {"contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"}})
     poslji("PATCH", f"/appStoreVersions/{ver['id']}", {"type": "appStoreVersions", "id": ver["id"], "attributes": {"copyright": B["copyright"], "releaseType": "AFTER_APPROVAL"}})
@@ -132,7 +133,7 @@ if AKCIJA == "vpisi":
         if loc not in B["jeziki"] and loc != app["attributes"].get("primaryLocale"):
             r = requests.delete(f"{API}/appStoreVersionLocalizations/{l['id']}", headers=H, timeout=60); print("ODSTRANI VERLOC", loc, r.status_code)
     for loc, L in B["jeziki"].items():
-        atr = {"description": L["opis"], "keywords": L["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B["podpora"], "promotionalText": L["promo"], **({} if prva else {"whatsNew": L["novo"]})}
+        atr = {"description": L["opis"], "keywords": L["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B.get("spletna", B["podpora"]), "promotionalText": L["promo"], **({} if prva else {"whatsNew": L["novo"]})}
         if loc in vl:
             poslji("PATCH", f"/appStoreVersionLocalizations/{vl[loc]['id']}", {"type": "appStoreVersionLocalizations", "id": vl[loc]["id"], "attributes": atr})
         else:
@@ -148,7 +149,7 @@ if AKCIJA == "vpisi":
                 tel = rd["attributes"]["contactPhone"]; ime = rd["attributes"]; break
     rev = {"contactFirstName": "Urška", "contactLastName": "Repušič", "contactEmail": "support@remako.si", "contactPhone": tel,
            "demoAccountRequired": False, "notes": B["opombe"]}
-    if tel: rev.update({k: ime[k] for k in ("contactFirstName", "contactLastName", "contactEmail") if ime.get(k)})
+    if tel: rev.update({k: ime[k] for k in ("contactFirstName", "contactLastName") if ime.get(k)})  # e-pošta ostane support@remako.si
     print("KONTAKT", rev["contactFirstName"], rev["contactLastName"], rev["contactEmail"], "tel:", "da" if tel else "NI")
     rd = get(f"/appStoreVersions/{ver['id']}/appStoreReviewDetail").get("data")
     if rd:
@@ -216,6 +217,9 @@ if AKCIJA == "slike":
                 requests.request(op["method"], op["url"], data=kos, headers={h["name"]: h["value"] for h in op["requestHeaders"]}, timeout=120).raise_for_status()
             poslji("PATCH", f"/appScreenshots/{sc['id']}", {"type": "appScreenshots", "id": sc["id"], "attributes": {"uploaded": True, "sourceFileChecksum": hashlib.md5(podatki).hexdigest()}})
         time.sleep(10)
+        # vrstni red po imenu datoteke (1, 2, 3 ...)
+        zdaj = sorted(get(f"/appScreenshotSets/{s['id']}/appScreenshots")["data"], key=lambda x: x["attributes"]["fileName"])
+        poslji("PATCH", f"/appScreenshotSets/{s['id']}/relationships/appScreenshots", [{"type": "appScreenshots", "id": x["id"]} for x in zdaj])
         for x in get(f"/appScreenshotSets/{s['id']}/appScreenshots")["data"]:
             print("SLIKA", x["attributes"]["fileName"], json.dumps(x["attributes"].get("assetDeliveryState")))
 
