@@ -219,8 +219,10 @@ if AKCIJA == "slike":
         time.sleep(10)
         # vrstni red po imenu datoteke (1, 2, 3 ...)
         zdaj = sorted(get(f"/appScreenshotSets/{s['id']}/appScreenshots")["data"], key=lambda x: x["attributes"]["fileName"])
-        requests.patch(f"{API}/appScreenshotSets/{s['id']}/relationships/appScreenshots", headers=H, timeout=60,
-                       json={"data": [{"type": "appScreenshots", "id": x["id"]} for x in zdaj]})
+        poslji("PATCH", f"/appScreenshotSets/{s['id']}/relationships/appScreenshots", [{"type": "appScreenshots", "id": x["id"]} for x in zdaj])
+        print("RED", [x["attributes"]["fileName"] for x in get(f"/appScreenshotSets/{s['id']}/relationships/appScreenshots")["data"]] if False else "")
+        print("ID", [x["id"][:8] + " " + x["attributes"]["fileName"] for x in zdaj])
+        print("POVEZAVE", [x["id"][:8] for x in requests.get(f"{API}/appScreenshotSets/{s['id']}/relationships/appScreenshots", headers=H, timeout=60).json().get("data", [])])
         for x in get(f"/appScreenshotSets/{s['id']}/appScreenshots")["data"]:
             print("SLIKA", x["attributes"]["fileName"], json.dumps(x["attributes"].get("assetDeliveryState")))
 
