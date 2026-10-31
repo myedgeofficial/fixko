@@ -122,6 +122,7 @@ if AKCIJA == "vpisi":
         a = {k: ("NONE" if k not in ("advertising", "gambling", "healthOrWellnessTopics", "lootBox", "messagingAndChat", "parentalControls", "ageAssurance", "unrestrictedWebAccess", "userGeneratedContent", "socialMedia", "socialMediaAgeRestricted") else False)
              for k in age["attributes"] if not k.startswith(("ageRatingOverride", "korea", "kidsAge", "gracRating", "developerAge"))}
         a["userGeneratedContent"] = True
+        a["advertising"] = True  # aplikacija kaže reklame AdMob
         poslji("PATCH", f"/ageRatingDeclarations/{age['id']}", {"type": "ageRatingDeclarations", "id": age["id"], "attributes": a})
     poslji("PATCH", f"/apps/{AID}", {"type": "apps", "id": AID, "attributes": {"contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"}})
     poslji("PATCH", f"/appStoreVersions/{ver['id']}", {"type": "appStoreVersions", "id": ver["id"], "attributes": {"copyright": B["copyright"], "releaseType": "AFTER_APPROVAL"}})
@@ -148,7 +149,7 @@ if AKCIJA == "vpisi":
                 tel = rd["attributes"]["contactPhone"]; ime = rd["attributes"]; break
     rev = {"contactFirstName": "Urška", "contactLastName": "Repušič", "contactEmail": "support@remako.si", "contactPhone": tel,
            "demoAccountRequired": False, "notes": B["opombe"]}
-    if tel: rev.update({k: ime[k] for k in ("contactFirstName", "contactLastName", "contactEmail") if ime.get(k)})
+    if tel: rev.update({k: ime[k] for k in ("contactFirstName", "contactLastName") if ime.get(k)})  # e-pošta ostane support@remako.si
     print("KONTAKT", rev["contactFirstName"], rev["contactLastName"], rev["contactEmail"], "tel:", "da" if tel else "NI")
     rd = get(f"/appStoreVersions/{ver['id']}/appStoreReviewDetail").get("data")
     if rd:
