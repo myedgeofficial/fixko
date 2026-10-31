@@ -552,7 +552,7 @@ function renderM() {
 // Moj profil na vrhu strani mojstra: slika, ime, podjetje, stroke in kje dela.
 function profilKartica(m, terminov) {
   const reg = (m.regije || []).includes("vsa") ? t("Vsa Slovenija") : (m.regije || []).map(regijaIme).join(", ");
-  const nacin = nacinPotrditve(m), cakam = m.preverjanje?.cakam, rocno = cakam && m.preverjanje?.nacin && m.preverjanje.nacin !== "nakazilo";
+  const nacin = nacinPotrditve(m), cakam = m.preverjanje?.cakam, rocno = cakam && m.preverjanje?.nacin && m.preverjanje.nacin !== "nakazilo" && !(m.preverjanje.nacin === "dokument" && nacin === "sepa" && !m.preverjanje.placnik);
   return `<section class="profil">
     <div class="pv">${m.slika ? `<img src="${esc(m.slika)}" alt="">` : `<span>${ikona("mojster", 34)}</span>`}
       <div><b>${esc(m.ime || t("Mojster"))}</b>${ocenaZnak(uid)}<span>${esc(m.firma || "")}</span>${m.davcna ? `<small>${t("Davčna {0}", esc(m.davcna))}</small>` : ""}</div>
@@ -1106,14 +1106,20 @@ function preveriTujeSheet(nacin) {
     ${vrstica(t("Prejemnik"), pl.prejemnik)}${vrstica("IBAN", pl.iban)}${pl.bic ? vrstica("BIC", pl.bic) : ""}${vrstica(t("Znesek"), "0,01 €")}${vrstica(t("Namen plačila"), sklic + " Popravko")}
     <p class="hint">${t("Tapni vrstico, da jo kopiraš. V namen plačila obvezno napiši {0}, po tem nakazilo povežemo s tvojim profilom.", `<b>${esc(sklic)}</b>`)}</p>`;
   const vies = EU.has(cc);
+  // Potrdilo o registraciji (obrtno dovoljenje, izpis iz registra): strežnik ga samodejno prebere in primerja z registrom.
+  const dokument = `<div class="dok"><b>${t("1. Potrdilo o registraciji")}</b>
+      <p class="hint">${t("Slikaj ali naloži obrtno dovoljenje ali izpis iz poslovnega registra (npr. Gewerbeschein). Preberemo ga samodejno in preverimo v registru.")}</p>
+      <label class="btn ${m.dokument ? "ghost" : ""}" for="dokf">${ikona("kamera", 22)} ${m.dokument ? t("Naloži drugo potrdilo") : t("Naloži potrdilo")}</label><input id="dokf" type="file" accept="image/*,application/pdf" hidden>
+      <p class="hint" id="dokst">${m.dokument ? ikona("kljukica", 16, 3) + " " + t("Potrdilo je naloženo.") : ""}</p></div>`;
   d.innerHTML = `<div role="dialog" aria-label="${t("Potrdi podjetje")}"><h2 style="margin-top:0">${t("Potrdi podjetje")}</h2>
     <div class="zakaj"><b>${t("Zakaj potrditev?")}</b>
       <p>${t("DDV številko lahko vpiše kdorkoli. Zato preverimo, da je podjetje {0} res tvoje.", `<b>${esc(m.firma)}</b>`)}</p>
       <p>${t("Tako stranke dobijo samo prave mojstre, ti pa oznako <b>»Podjetje preverjeno«</b>, ki ji stranke bolj zaupajo. Potrditev je brezplačna.")}</p></div>
-    ${nacin === "sepa" ? nakazilo + `<div class="err" id="perr" hidden></div><button class="btn" type="button" id="ok">${m.preverjanje?.cakam ? t("Nakazal sem znova") : t("Nakazal sem")}</button>`
+    ${dokument}
+    ${nacin === "sepa" ? `<b class="korak">${t("2. Nakazilo 0,01 €")}</b>` + nakazilo + `<div class="err" id="perr" hidden></div><button class="btn" type="button" id="ok">${m.preverjanje?.cakam ? t("Nakazal sem znova") : t("Nakazal sem")}</button>`
       : `<p class="lead">${vies ? t("Preverimo tvojo DDV številko {0} v evropskem sistemu VIES in podatke podjetja. Morda te pokličemo na {1}.", `<b>${esc(m.davcna)}</b>`, esc(m.tel)) : t("Podjetje {0} pregledamo ročno v poslovnem registru. Morda te pokličemo na {1}.", `<b>${esc(m.firma)}</b>`, esc(m.tel))}</p>
         <p class="note">${t("Običajno v 1 do 2 delovnih dneh.")}</p>
-        <div class="err" id="perr" hidden></div><button class="btn" type="button" id="pregled">${t("Pošlji v pregled")}</button>
+        <div class="err" id="perr" hidden></div>
         <details class="stara"><summary>${t("Ima podjetje račun v evrih? Potrdi takoj z nakazilom 0,01 €")}</summary>${nakazilo}<button class="btn ghost" type="button" id="ok">${t("Nakazal sem")}</button></details>`}</div>`;
   document.body.appendChild(d);
   d.onclick = (e) => { if (e.target === d) d.remove(); };
@@ -1126,6 +1132,24 @@ function preveriTujeSheet(nacin) {
   };
   d.querySelector("#ok").onclick = poslji("nakazal", t("Ko nakazilo prispe, te potrdimo in dobiš obvestilo. Iz tujine lahko traja do 2 delovna dneva."));
   d.querySelector("#pregled")?.addEventListener("click", poslji("pregledPodjetja", t("Podjetje pregledamo v 1 do 2 delovnih dneh. Ko je potrjeno, dobiš obvestilo.")));
+  d.querySelector("#dokf").onchange = async (e) => {
+    const f = e.target.files?.[0], st = d.querySelector("#dokst"), el = d.querySelector("#perr"), lbl = d.querySelector("label[for=dokf]");
+    if (!f) return;
+    el.hidden = true; lbl.classList.add("dis"); st.textContent = t("Nalagam in preverjam potrdilo …");
+    try {
+      // Slike pomanjšamo (besedilo ostane berljivo), PDF naložimo, kot je.
+      const pdf = f.type === "application/pdf";
+      if (pdf && f.size > 10 * 1024 * 1024) throw new Error(t("Datoteka je prevelika (največ 10 MB)."));
+      const blob = pdf ? f : (await shrink(f, 2200)).blob;
+      const pot = `dokumenti/${uid}/${Date.now()}.${pdf ? "pdf" : "jpg"}`, r = ref(storage, pot);
+      await uploadBytes(r, blob, { contentType: pdf ? "application/pdf" : "image/jpeg" });
+      const x = await call("dokumentPodjetja", { pot, url: await getDownloadURL(r) });
+      d.remove();
+      toast(t("Hvala"), x.potrjen ? t("Podjetje je potrjeno. Zdaj se lahko javljaš na dela.")
+        : nacin === "sepa" ? t("Potrdilo je naloženo. Ko prispe še nakazilo 0,01 €, te potrdimo.") : t("Podjetje pregledamo v 1 do 2 delovnih dneh. Ko je potrjeno, dobiš obvestilo."));
+    } catch (x) { lbl.classList.remove("dis"); st.textContent = ""; el.hidden = false; el.textContent = napaka(x, t("Ni uspelo.")); }
+    e.target.value = "";
+  };
 }
 // Skrbnik (Urška, Teo): seznam mojstrov, ki so nakazali; na izpisku preveri sklic in da je TRR podjetja s to davčno.
 async function skrbnikSheet() {

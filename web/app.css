@@ -316,3 +316,7 @@ header::after{content:"";position:absolute;left:0;right:0;bottom:4px;height:3px;
 .btn.glas.snema{background:#FFF1EC !important;color:#C2410C;border:1.5px solid #FDBA9B;box-shadow:none}
 .rec{width:12px;height:12px;border-radius:50%;background:#E5484D;display:inline-block;animation:utrip 1s infinite}
 @keyframes utrip{50%{opacity:.25}}
+.dok{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 6px}
+.dok>b{display:block;font:700 19px var(--display);margin-bottom:2px}
+.dok .btn{margin-top:12px}
+label.btn.dis{opacity:.5;pointer-events:none}

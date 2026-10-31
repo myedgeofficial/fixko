@@ -18,6 +18,7 @@ const crypto = require("crypto");
 const { opisTermina, strokaIme, davcnaOk, testnaFirma, sklicIz, jePreverjen, pokriva, T } = require("./besedila");
 const banka = require("./banka");
 const mod = require("./moderacija");
+const podjetje = require("./podjetje");
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
@@ -641,7 +642,7 @@ exports.nakazal = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
   const m = await mRef.get();
   if (!m.exists || !profilOk(m.data())) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
   const md = m.data();
-  await mRef.update({ preverjanje: { cakam: true, sklic: sklicIz(uid), davcna: md.davcna || "", ob: FieldValue.serverTimestamp() } });
+  await mRef.update({ preverjanje: { cakam: true, ...(md.preverjanje?.nacin ? { nacin: md.preverjanje.nacin } : {}), sklic: sklicIz(uid), davcna: md.davcna || "", ob: FieldValue.serverTimestamp() } });
   await obvestiOMojstru(uid, md, "Mojster čaka na potrditev", "mojster pravi, da je nakazal (banka ga še ni našla)");
   await mod.posljiSkrbniku("Popravko: mojster pravi, da je nakazal 0,01 €", `${md.ime || ""}, ${md.firma || ""} (davčna ${md.davcna || "-"})
 Sklic: ${sklicIz(uid)}
@@ -651,15 +652,11 @@ Pregled: ${PREGLED_URL}`);
 });
 
 // Tuje podjetje brez evrskega računa: pregled skrbnika; za EU podjetja prej preverimo DDV številko v VIES (Evropska komisija).
-const EU = new Set("AT BE BG CY CZ DE DK EE ES FI FR GR HR HU IE IT LT LU LV MT NL PL PT RO SE SK".split(" "));
+const EU = podjetje.EU;
 async function vies(davcna) {
-  const cc = davcna.slice(0, 2), st = davcna.slice(2);
-  const r = await fetch(`https://ec.europa.eu/taxation_customs/vies/rest-api/ms/${cc}/vat/${encodeURIComponent(st)}`, { headers: { accept: "application/json" } });
-  if (!r.ok) throw new Error("VIES " + r.status);
-  const j = await r.json();
-  if (j.userError && j.userError !== "VALID" && j.userError !== "INVALID") throw new Error("VIES " + j.userError);
-  const cisto = (x) => (x && x !== "---" ? String(x).replace(/\s+/g, " ").trim().slice(0, 200) : "");
-  return { veljavna: !!j.isValid, ime: cisto(j.name), naslov: cisto(j.address) };
+  const st = String(davcna || "");
+  const r = await podjetje.register(st.slice(0, 2) === "EL" ? "GR" : st.slice(0, 2), st);
+  return r && { veljavna: r.veljavna, ime: r.ime, naslov: r.naslov };
 }
 exports.pregledPodjetja = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
   const uid = req.auth?.uid;
@@ -674,13 +671,59 @@ exports.pregledPodjetja = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
     try { v = await vies(String(md.davcna || "")); } catch (e) { console.warn("vies", uid, e.message); }
     if (v && !v.veljavna) throw new HttpsError("failed-precondition", "DDV številka v sistemu VIES ni veljavna. Preveri jo v profilu.");
   }
-  await mRef.update({ preverjanje: { cakam: true, nacin: v ? "vies" : "rocno", sklic: sklicIz(uid), davcna: md.davcna || "", ...(v ? { vies: v } : {}), ob: FieldValue.serverTimestamp() } });
+  await mRef.update({ preverjanje: { cakam: true, nacin: md.dokument ? "dokument" : v ? "vies" : "rocno", sklic: sklicIz(uid), davcna: md.davcna || "", ...(v ? { vies: v } : {}), ob: FieldValue.serverTimestamp() } });
   await mod.posljiSkrbniku("Popravko: tuje podjetje čaka na pregled (" + cc + ")", `${md.ime || ""}, ${md.firma || ""}
 DDV: ${md.davcna || "-"} · Telefon: ${md.tel || "-"}
 VIES: ${v ? (v.veljavna ? "veljavna" : "NI veljavna") + (v.ime ? ", " + v.ime : "") + (v.naslov ? ", " + v.naslov : "") : EU.has(cc) ? "ni odgovora, preveri ročno" : "ni EU, preveri v registru države"}
 
 Pregled: ${PREGLED_URL}`);
   return { ok: true, vies: v };
+});
+
+// Tuj mojster naloži potrdilo o registraciji (dokumenti/{uid}/...): AI ga prebere, register potrdi ime in številko.
+// Če se vse ujema in je s tem imenom že prišlo nakazilo 0,01 €, ga potrdimo sami; sicer pregled skrbnika (s povzetkom).
+const TIPI_DOKUMENTA = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"]);
+exports.dokumentPodjetja = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeconds: 120 }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const pot = String(req.data?.pot || ""), url = String(req.data?.url || "");
+  if (!pot.startsWith("dokumenti/" + uid + "/") || pot.includes("..") || !url.includes(encodeURIComponent(pot))) throw new HttpsError("invalid-argument", "Napačen dokument.");
+  const mRef = db.doc("mojstri/" + uid);
+  const m = await mRef.get();
+  if (!m.exists || !profilOk(m.data())) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
+  const md = m.data(), cc = md.drzava || "SI";
+  if (cc === "SI") throw new HttpsError("failed-precondition", "Najprej potrdi podjetje (nakazilo 0,01 €).");
+  const datoteka = admin.storage().bucket().file(pot);
+  const [meta] = await datoteka.getMetadata().catch(() => [null]);
+  if (!meta || !TIPI_DOKUMENTA.has(meta.contentType) || Number(meta.size) > 10 * 1024 * 1024) throw new HttpsError("invalid-argument", "Napačen dokument.");
+  const [dok, reg] = await Promise.all([
+    datoteka.download().then(([b]) => podjetje.preberiDokument(b, meta.contentType)).catch((e) => { console.error("dokument ai", uid, e.message); return null; }),
+    podjetje.register(cc, md.davcna).catch((e) => { console.warn("register", uid, e.message); return null; })
+  ]);
+  if (reg && !reg.veljavna && reg.vir === "VIES") throw new HttpsError("failed-precondition", "DDV številka v sistemu VIES ni veljavna. Preveri jo v profilu.");
+  const o = podjetje.oceni(md, dok, reg);
+  const ocena = { ...o, firma: md.firma || "", davcna: md.davcna || "", dokument: dok, register: reg, ob: FieldValue.serverTimestamp() };
+  const p = md.preverjanje || {};
+  // Nakazilo je lahko prišlo že prej (banka ga je pustila v pregledu, ker dokumenta še ni bilo).
+  if (podjetje.placnikUjema(p.placnik, o, cc)) {
+    await mRef.update({ dokument: { url, pot, ob: FieldValue.serverTimestamp() }, ocena });
+    await potrdiMojstra(mRef, md, { samodejno: true, placnik: p.placnik, iban: p.iban || "", dokument: true });
+    await obvestiOMojstru(uid, md, "Mojster samodejno potrjen", "prispelo, dokument in register se ujemata").catch(() => {});
+    return { ok: true, potrjen: true };
+  }
+  const vies = reg?.vir === "VIES" ? { veljavna: reg.veljavna, ime: reg.ime, naslov: reg.naslov } : null;
+  await mRef.update({ dokument: { url, pot, ob: FieldValue.serverTimestamp() }, ocena,
+    preverjanje: { cakam: true, nacin: "dokument", sklic: p.sklic || sklicIz(uid), davcna: md.davcna || "", ...(p.placnik ? { placnik: p.placnik, iban: p.iban || "" } : {}), ...(vies ? { vies } : {}), ob: FieldValue.serverTimestamp() } });
+  await obvestiOMojstru(uid, md, "Tuje podjetje čaka na pregled (" + cc + ")", p.placnik ? "prispelo" : "še ni").catch(() => {});
+  await mod.posljiSkrbniku(`Fixko: potrdilo podjetja (${cc}) ${o.ok ? "se ujema" : "preveri ročno"}`, `${md.ime || ""}, ${md.firma || ""}
+DDV: ${md.davcna || "-"} · Telefon: ${md.tel || "-"}
+Dokument: ${dok ? `${dok.vrsta}, ${dok.ime}, ${dok.stevilka || "brez številke"}, ${dok.dejavnost}` : "AI ga ni prebral"}
+Register: ${reg ? `${reg.vir}: ${reg.veljavna ? "veljavna" : "NI veljavna"}${reg.ime ? ", " + reg.ime : ""}` : "ni dostopen"}
+${o.ok ? (p.placnik ? "Vse se ujema, plačnik " + p.placnik + " pa ne." : "Vse se ujema. Ko pride nakazilo 0,01 € s tem imenom, se potrdi samo.") : "Ne ujema se: " + o.razlogi.join("; ")}
+Dokument: ${url}
+
+Pregled: ${PREGLED_URL}`);
+  return { ok: o.ok, potrjen: false };
 });
 
 async function potrdiMojstra(mRef, md, kako) {
@@ -818,11 +861,18 @@ exports.pregledStats = onRequest({ cors: STATS_IZVORI, secrets: ["MAIL_PASS"], m
   }
 });
 
+// Potrdilo tujega mojstra in ocena (AI + register) za stran pregled.
+function pregledDokumenta(m) {
+  const o = m.ocena, d = o?.dokument;
+  return { dokument: m.dokument?.url || "", ocena: o ? { ok: !!o.ok && o.firma === (m.firma || ""), ime: o.ime || "", razlogi: o.razlogi || [], ob: o.ob?.toMillis?.() || 0,
+    dokument: d ? { vrsta: d.vrsta, ime: d.ime, stevilka: d.stevilka, dejavnost: d.dejavnost, opomba: d.opomba } : null,
+    register: o.register ? { vir: o.register.vir, veljavna: o.register.veljavna, ime: o.register.ime, naslov: o.register.naslov } : null } : null };
+}
 async function skrbnikAkcija(req) {
   const akcija = req.data?.akcija;
   if (akcija === "seznam") {
     const q = await db.collection("mojstri").where("preverjanje.cakam", "==", true).limit(100).get();
-    return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0, drzava: m.drzava || "SI", nacin: m.preverjanje?.nacin || "nakazilo", vies: m.preverjanje?.vies || null }; }) };
+    return { mojstri: q.docs.map((d) => { const m = d.data(); return { uid: d.id, ime: m.ime, firma: m.firma, davcna: m.davcna || "", tel: m.tel || "", slika: m.slika || "", sklic: m.preverjanje?.sklic || sklicIz(d.id), placnik: m.preverjanje?.placnik || "", ob: m.preverjanje?.ob?.toMillis() || 0, drzava: m.drzava || "SI", nacin: m.preverjanje?.nacin || "nakazilo", vies: m.preverjanje?.vies || null, ...pregledDokumenta(m) }; }) };
   }
   if (akcija === "ping") return { ok: true };
   if (akcija === "pari") {
@@ -879,7 +929,7 @@ async function skrbnikAkcija(req) {
         stanje: potrjen ? "potrjen" : p.cakam ? "caka" : p.zavrnjeno ? "zavrnjen" : "ni",
         preverjeno: v ? { samodejno: !!v.samodejno, placnik: v.placnik || "", iban: v.iban || "", ob: ms(v.ob), davcna: v.davcna || "" } : null,
         sklic: p.sklic || sklicIz(d.id), placnik: p.placnik || "", iban: p.iban || "", cakaOd: ms(p.ob),
-        ujema: p.placnik ? banka.ujema(p.placnik, m.firma) : null
+        ujema: p.placnik ? banka.ujema(p.placnik, m.firma, m.drzava) : null, drzava: m.drzava || "SI", ...pregledDokumenta(m)
       };
     }).sort((a, b) => b.ustvarjen - a.ustvarjen);
     return { mojstri, banka: b };
@@ -928,6 +978,7 @@ async function pobrisiMojstra(uid) {
   await Promise.all([...pon.docs, ...oc.docs].map((x) => x.ref.delete()));
   await Promise.all([db.doc("mojstri/" + uid).delete(), db.doc("profili/" + uid).delete()]);
   await admin.storage().bucket().deleteFiles({ prefix: "profil/" + uid + "/" }).catch((e) => console.warn("profil", e.message));
+  await admin.storage().bucket().deleteFiles({ prefix: "dokumenti/" + uid + "/" }).catch((e) => console.warn("dokumenti", e.message));
   console.log("skrbnik izbrisal mojstra", uid, "del", dela.size, "ponudb", pon.size);
 }
 // Javno klicljiva (aplikacija); brez tega je Cloud Run zavrnil klic in brisanje računa ni delovalo.
@@ -953,6 +1004,7 @@ exports.izbrisi = onCall({ invoker: "public" }, async (req) => {
   await Promise.all([...oc.docs.map((d) => d.ref.delete()), db.doc("profili/" + uid).delete()]);
   await admin.storage().bucket().deleteFiles({ prefix: "slike/" + uid + "/" }).catch((e) => console.warn("slike", e.message));
   await admin.storage().bucket().deleteFiles({ prefix: "profil/" + uid + "/" }).catch((e) => console.warn("profil", e.message));
+  await admin.storage().bucket().deleteFiles({ prefix: "dokumenti/" + uid + "/" }).catch((e) => console.warn("dokumenti", e.message));
   await admin.auth().deleteUser(uid).catch(() => {});
   return { ok: true };
 });
