@@ -843,7 +843,7 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
 // (Teo še s kodo 2FA, enako kot stats.remako.si), tudi obvestila na telefon.
 const STATS_IZVORI = ["https://stats.remako.si", "https://remako-stats.web.app", "https://remako-stats.firebaseapp.com"];
 const STATS_SKRBNIKI = { "teo.simonic7@gmail.com": true, "urska.repusic@gmail.com": false, "repusicurska@gmail.com": false };
-const STATS_DEJANJA = new Set(["vsi", "statistika", "dela", "izbrisi-delo", "izbrisi-mojstra", "potrdi", "zavrni", "banka-stanje", "banka-povezi", "banka-preglej", "push-kljuc", "push-naroci", "push-test"]);
+const STATS_DEJANJA = new Set(["vsi", "statistika", "dela", "izbrisi-delo", "izbrisi-mojstra", "potrdi", "zavrni", "banka-stanje", "banka-povezi", "banka-preglej", "push-kljuc", "push-naroci", "push-test", "analitika"]);
 const studio = () => admin.apps.find((a) => a.name === "studio") || admin.initializeApp({ projectId: "byurska-studio" }, "studio");
 exports.pregledStats = onRequest({ cors: STATS_IZVORI, secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeconds: 120 }, async (req, res) => {
   try {
@@ -892,6 +892,7 @@ async function skrbnikAkcija(req) {
   }
   if (akcija === "push-test") return { poslano: await pushSkrbniku("Popravko: obvestila delujejo", "Ko se registrira nov mojster, dobiš obvestilo sem.") };
   if (akcija === "statistika") return require("./statistika").zberi();
+  if (akcija === "analitika") return require("./statistika").analitika();
   // Vsa dela (zadnjih 300) in brisanje kateregakoli dela, za stran pregled.
   if (akcija === "dela") {
     const ms = (t) => t?.toMillis?.() || 0;
@@ -940,8 +941,11 @@ async function skrbnikAkcija(req) {
     if (!m.exists) throw new HttpsError("not-found", "Mojstra ni.");
     const md = m.data();
     if (akcija === "potrdi") return potrdiMojstra(mRef, md, { samodejno: false });
-    await mRef.update({ preverjanje: { cakam: false, zavrnjeno: true, sklic: sklicIz(m.id), ob: FieldValue.serverTimestamp() } });
-    if (md.push) await sendApns([md.push], T(jzk(md), "Nakazila nismo našli"), T(jzk(md), "Preveri, da si nakazal s TRR podjetja in s pravim sklicem."), { vloga: "M" });
+    // Zavrnjeno potrdilo o registraciji (tuji mojster) ali nakazilo, ki ga nismo našli.
+    const dok = req.data?.razlog === "dokument";
+    await mRef.update({ preverjanje: { cakam: false, zavrnjeno: true, ...(dok ? { razlog: "dokument" } : {}), sklic: sklicIz(m.id), ob: FieldValue.serverTimestamp() } });
+    if (md.push) await sendApns([md.push], T(jzk(md), dok ? "Potrdila nismo mogli potrditi" : "Nakazila nismo našli"),
+      T(jzk(md), dok ? "Naloži jasno potrdilo o registraciji podjetja (obrtno dovoljenje ali izpis iz registra)." : "Preveri, da si nakazal s TRR podjetja in s pravim sklicem."), { vloga: "M" });
     return { ok: true };
   }
   if (akcija === "banka-stanje") return banka.stanje();

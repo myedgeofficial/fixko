@@ -64,6 +64,48 @@ async function zberi() {
   return { uporabniki: u, mojstri: m, dela: d, objava: OBJAVA, ponudbe: ponudbe.data().count, ocene: ocene.data().count, cas: now };
 }
 
+// Podrobna analitika za stats.remako.si: dela po aplikaciji, stroki in stanju, mojstri po stroki, opravljena dela in ocene po mojstrih.
+// Fixko = delo ali mojster v tuji državi (regija »de-by«, drzava ≠ SI), Popravko = Slovenija.
+async function analitika() {
+  const db = admin.firestore(), { strokaIme } = require("./besedila");
+  const [mojstri, dela, ponudbe, ocene, profili] = await Promise.all([
+    db.collection("mojstri").select("ime", "firma", "davcna", "preverjeno", "stroke", "drzava", "slika").get(),
+    db.collection("dela").select("status", "ustvarjeno", "stroka", "regija", "mojster", "budget").get(),
+    db.collection("ponudbe").select("mojster", "status").get(),
+    db.collection("ocene").select("za", "vloga", "zvezdice", "stroka").get(),
+    db.collection("profili").select("vsota", "st").get()
+  ]);
+  const app = (tuja) => (tuja ? "Fixko" : "Popravko");
+  const pristej = (o, k, n = 1) => { o[k] = (o[k] || 0) + n; };
+  const D = { skupaj: dela.size, poAplikaciji: {}, poStroki: {}, poStanju: {}, strokaAplikacija: {} };
+  const poMojstru = new Map();
+  const mj = (uid) => poMojstru.get(uid) || poMojstru.set(uid, { prevzeta: 0, opravljena: 0, ponudbe: 0, sprejete: 0, stroke: {} }).get(uid);
+  dela.forEach((x) => {
+    const d = x.data(), a = app(String(d.regija || "").includes("-")), s = strokaIme(d.stroka || "drugo"), st = d.status || "odprto";
+    pristej(D.poAplikaciji, a); pristej(D.poStroki, s); pristej(D.poStanju, st);
+    D.strokaAplikacija[s] = D.strokaAplikacija[s] || {}; pristej(D.strokaAplikacija[s], a);
+    if (d.mojster) { const m = mj(d.mojster); if (st === "opravljeno") { m.opravljena++; pristej(m.stroke, s); } else if (st === "prevzeto") m.prevzeta++; }
+  });
+  ponudbe.forEach((x) => { const p = x.data(); if (!p.mojster) return; const m = mj(p.mojster); m.ponudbe++; if (["sprejeto", "sprejeta"].includes(p.status)) m.sprejete++; });
+  const O = { skupaj: 0, vsota: 0, porazdelitev: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, poStroki: {} };
+  ocene.forEach((x) => {
+    const o = x.data();
+    if (o.vloga !== "M" || !(o.zvezdice >= 1)) return; // samo ocene mojstrov (stranka oceni mojstra)
+    O.skupaj++; O.vsota += o.zvezdice; pristej(O.porazdelitev, o.zvezdice);
+    const s = strokaIme(o.stroka || "drugo"); O.poStroki[s] = O.poStroki[s] || { st: 0, vsota: 0 }; O.poStroki[s].st++; O.poStroki[s].vsota += o.zvezdice;
+  });
+  const ocena = new Map(profili.docs.map((p) => [p.id, p.data()]));
+  const M = { skupaj: mojstri.size, poAplikaciji: {}, poStroki: {}, preverjeni: 0 };
+  const seznam = mojstri.docs.map((x) => {
+    const m = x.data(), a = app(!!m.drzava && m.drzava !== "SI"), st = poMojstru.get(x.id) || { prevzeta: 0, opravljena: 0, ponudbe: 0, sprejete: 0 }, p = ocena.get(x.id) || {};
+    pristej(M.poAplikaciji, a); if (jePreverjen(m)) M.preverjeni++;
+    for (const k of m.stroke || []) pristej(M.poStroki, strokaIme(k));
+    return { uid: x.id, ime: m.ime || "", firma: m.firma || "", slika: m.slika || "", aplikacija: a, drzava: m.drzava || "SI", preverjen: jePreverjen(m),
+      stroke: (m.stroke || []).map((k) => strokaIme(k)), ...st, ocen: p.st || 0, ocena: p.st ? Math.round((p.vsota / p.st) * 10) / 10 : null };
+  });
+  return { dela: D, mojstri: M, ocene: { ...O, povprecje: O.skupaj ? Math.round((O.vsota / O.skupaj) * 100) / 100 : null }, seznam, cas: Date.now() };
+}
+
 exports.statistika = onRequest({ cors: IZVORI, region: "europe-west1", timeoutSeconds: 120, memory: "512MiB" }, async (req, res) => {
   try {
     const t = String(req.get("authorization") || "").replace(/^Bearer /, "");
@@ -76,3 +118,4 @@ exports.statistika = onRequest({ cors: IZVORI, region: "europe-west1", timeoutSe
   }
 });
 exports.zberi = zberi;
+exports.analitika = analitika;
