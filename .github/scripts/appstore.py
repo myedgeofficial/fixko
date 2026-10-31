@@ -133,7 +133,7 @@ if AKCIJA == "vpisi":
         if loc not in B["jeziki"] and loc != app["attributes"].get("primaryLocale"):
             r = requests.delete(f"{API}/appStoreVersionLocalizations/{l['id']}", headers=H, timeout=60); print("ODSTRANI VERLOC", loc, r.status_code)
     for loc, L in B["jeziki"].items():
-        atr = {"description": L["opis"], "keywords": L["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B["podpora"], "promotionalText": L["promo"], **({} if prva else {"whatsNew": L["novo"]})}
+        atr = {"description": L["opis"], "keywords": L["kljucne"], "supportUrl": B["podpora"], "marketingUrl": B.get("spletna", B["podpora"]), "promotionalText": L["promo"], **({} if prva else {"whatsNew": L["novo"]})}
         if loc in vl:
             poslji("PATCH", f"/appStoreVersionLocalizations/{vl[loc]['id']}", {"type": "appStoreVersionLocalizations", "id": vl[loc]["id"], "attributes": atr})
         else:
