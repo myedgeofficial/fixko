@@ -19,6 +19,7 @@ const { opisTermina, strokaIme, davcnaOk, testnaFirma, sklicIz, jePreverjen, pok
 const banka = require("./banka");
 const mod = require("./moderacija");
 const podjetje = require("./podjetje");
+const sp = require("./sporocila");
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
@@ -843,7 +844,8 @@ exports.skrbnik = onCall({ secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeco
 // (Teo še s kodo 2FA, enako kot stats.remako.si), tudi obvestila na telefon.
 const STATS_IZVORI = ["https://stats.remako.si", "https://remako-stats.web.app", "https://remako-stats.firebaseapp.com"];
 const STATS_SKRBNIKI = { "teo.simonic7@gmail.com": true, "urska.repusic@gmail.com": false, "repusicurska@gmail.com": false };
-const STATS_DEJANJA = new Set(["vsi", "statistika", "dela", "izbrisi-delo", "izbrisi-mojstra", "potrdi", "zavrni", "banka-stanje", "banka-povezi", "banka-preglej", "push-kljuc", "push-naroci", "push-test", "analitika"]);
+const STATS_DEJANJA = new Set(["vsi", "statistika", "dela", "izbrisi-delo", "izbrisi-mojstra", "potrdi", "zavrni", "banka-stanje", "banka-povezi", "banka-preglej", "push-kljuc", "push-naroci", "push-test", "analitika",
+  "sporocila", "kontakt", "stroka-zahtevaj", "stroka-potrdi", "stroka-odstrani"]);
 const studio = () => admin.apps.find((a) => a.name === "studio") || admin.initializeApp({ projectId: "byurska-studio" }, "studio");
 exports.pregledStats = onRequest({ cors: STATS_IZVORI, secrets: ["MAIL_PASS"], memory: "512MiB", timeoutSeconds: 120 }, async (req, res) => {
   try {
@@ -930,7 +932,10 @@ async function skrbnikAkcija(req) {
         stanje: potrjen ? "potrjen" : p.cakam ? "caka" : p.zavrnjeno ? "zavrnjen" : "ni",
         preverjeno: v ? { samodejno: !!v.samodejno, placnik: v.placnik || "", iban: v.iban || "", ob: ms(v.ob), davcna: v.davcna || "" } : null,
         sklic: p.sklic || sklicIz(d.id), placnik: p.placnik || "", iban: p.iban || "", cakaOd: ms(p.ob),
-        ujema: p.placnik ? banka.ujema(p.placnik, m.firma, m.drzava) : null, drzava: m.drzava || "SI", ...pregledDokumenta(m)
+        ujema: p.placnik ? banka.ujema(p.placnik, m.firma, m.drzava) : null, drzava: m.drzava || "SI", ...pregledDokumenta(m),
+        strokeK: m.stroke || [], potrditve: Object.fromEntries(Object.entries(m.potrditveStrok || {}).map(([k, x]) => [k, { stanje: x.stanje, ob: ms(x.ob), odgovor: ms(x.odgovor) }])),
+        posta: { skrbnik: m.posta?.skrbnik || 0, mojster: m.posta?.mojster || 0, zadnje: ms(m.posta?.zadnje) },
+        kanal: m.push ? "push" : sp.veljavenEmail(m.email) ? "e-pošta" : "samo v aplikaciji", email: m.email || ""
       };
     }).sort((a, b) => b.ustvarjen - a.ustvarjen);
     return { mojstri, banka: b };
@@ -948,6 +953,36 @@ async function skrbnikAkcija(req) {
       T(jzk(md), dok ? "Naloži jasno potrdilo o registraciji podjetja (obrtno dovoljenje ali izpis iz registra)." : "Preveri, da si nakazal s TRR podjetja in s pravim sklicem."), { vloga: "M" });
     return { ok: true };
   }
+  // Korespondenca z mojstrom: nit, prosto sporočilo, zahteva za potrditev stroke, potrditev in odstranitev stroke.
+  if (akcija === "sporocila") {
+    const mRef = db.doc("mojstri/" + String(req.data?.uid || ""));
+    const q = await mRef.collection("sporocila").orderBy("ob").limitToLast(200).get();
+    await mRef.update({ "posta.skrbnik": 0 }).catch(() => {});
+    return { sporocila: q.docs.map((d) => { const x = d.data(); return {
+      id: d.id, od: x.od, vrsta: x.vrsta || "sporocilo", stroka: x.stroka ? strokaIme(x.stroka) : "", besedilo: sp.besediloSporocila(x, "sl"),
+      kanal: x.kanal || "", dokazilo: x.dokazilo?.url || "", pdf: x.dokazilo?.tip === "application/pdf", ob: x.ob?.toMillis?.() || 0
+    }; }) };
+  }
+  if (akcija === "kontakt") {
+    const besedilo = String(req.data?.besedilo || "").trim().slice(0, 2000);
+    if (!besedilo) throw new HttpsError("invalid-argument", "Napiši sporočilo.");
+    return sporociMojstru(String(req.data?.uid || ""), { vrsta: "sporocilo", besedilo, kdo: req.auth.token?.email || "" });
+  }
+  if (akcija === "stroka-zahtevaj" || akcija === "stroka-potrdi" || akcija === "stroka-odstrani") {
+    const uid = String(req.data?.uid || ""), stroka = String(req.data?.stroka || ""), opomba = String(req.data?.besedilo || "").trim().slice(0, 1000);
+    if (!/^[a-z]{2,20}$/.test(stroka)) throw new HttpsError("invalid-argument", "Napačna stroka.");
+    const mRef = db.doc("mojstri/" + uid), m = await mRef.get();
+    if (!m.exists) throw new HttpsError("not-found", "Mojstra ni.");
+    const kdo = req.auth.token?.email || "";
+    if (akcija === "stroka-odstrani") {
+      await mRef.update({ stroke: FieldValue.arrayRemove(stroka), ["potrditveStrok." + stroka]: FieldValue.delete() });
+      return sporociMojstru(uid, { vrsta: "odstranjena", stroka, besedilo: opomba, kdo });
+    }
+    if (!(m.data().stroke || []).includes(stroka)) throw new HttpsError("failed-precondition", "Mojster te stroke nima več.");
+    const zahtevaj = akcija === "stroka-zahtevaj";
+    await mRef.update({ ["potrditveStrok." + stroka]: { stanje: zahtevaj ? "caka" : "potrjena", ob: FieldValue.serverTimestamp(), kdo } });
+    return sporociMojstru(uid, { vrsta: zahtevaj ? "potrditev" : "potrjena", stroka, besedilo: opomba, kdo });
+  }
   if (akcija === "banka-stanje") return banka.stanje();
   if (akcija === "banka-povezi") {
     try { return { url: await banka.povezi() }; } catch (e) { throw new HttpsError("failed-precondition", e.message); }
@@ -957,6 +992,55 @@ async function skrbnikAkcija(req) {
   }
   throw new HttpsError("invalid-argument", "Neznano dejanje.");
 }
+
+/* ---------- sporočila skrbnika in odgovori mojstra ---------- */
+// Sporočilo shranimo v nit mojstra (mojstri/{uid}/sporocila) in ga dostavimo: obvestilo na telefon,
+// brez njega e-pošta (če jo je mojster vpisal), sicer ostane v aplikaciji in ga vidi ob naslednjem odprtju.
+async function sporociMojstru(uid, s) {
+  const mRef = db.doc("mojstri/" + uid), m = await mRef.get();
+  if (!m.exists) throw new HttpsError("not-found", "Mojstra ni.");
+  const md = m.data(), app = aplikacijaMojstra(md), o = sp.obvestilo(s, jzk(md), app);
+  const sRef = await mRef.collection("sporocila").add({ od: "skrbnik", vrsta: s.vrsta, stroka: s.stroka || "", besedilo: s.besedilo || "", kdo: s.kdo || "", kanal: "aplikacija", ob: FieldValue.serverTimestamp() });
+  await mRef.update({ "posta.mojster": FieldValue.increment(1), "posta.zadnje": FieldValue.serverTimestamp() });
+  let kanal = "aplikacija";
+  if (md.push) {
+    const [r] = await sendApns([md.push], o.naslov, o.telo, { vloga: "M", sporocilo: "1" });
+    if (r?.status === 200) kanal = "push";
+    else if (r && (r.status === 410 || (r.status === 400 && /BadDeviceToken/.test(r.data)))) await mRef.update({ push: FieldValue.delete() });
+  }
+  if (kanal !== "push" && sp.veljavenEmail(md.email) && await mod.posljiMail(md.email, o.mail.zadeva, o.mail.besedilo, app)) kanal = "e-pošta";
+  if (kanal !== "aplikacija") await sRef.update({ kanal });
+  return { ok: true, kanal };
+}
+// Mojster odgovori (besedilo in/ali dokazilo iz dokumenti/{uid}/) ali označi sporočila kot prebrana. Skrbnik dobi obvestilo in e-pošto.
+exports.sporociloSkrbniku = onCall({ secrets: ["MAIL_PASS"] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Ni prijave.");
+  const mRef = db.doc("mojstri/" + uid), m = await mRef.get();
+  if (!m.exists) throw new HttpsError("failed-precondition", "Najprej izpolni profil.");
+  if (req.data?.prebrano) { await mRef.update({ "posta.mojster": 0 }); return { ok: true }; }
+  const md = m.data(), besedilo = String(req.data?.besedilo || "").trim().slice(0, 1000);
+  const stroka = /^[a-z]{2,20}$/.test(String(req.data?.stroka || "")) && md.potrditveStrok?.[req.data.stroka] ? req.data.stroka : "";
+  const pot = String(req.data?.pot || ""), url = String(req.data?.url || "");
+  let dokazilo = null;
+  if (pot) {
+    if (!pot.startsWith("dokumenti/" + uid + "/") || pot.includes("..") || !url.includes(encodeURIComponent(pot))) throw new HttpsError("invalid-argument", "Napačen dokument.");
+    const [meta] = await admin.storage().bucket().file(pot).getMetadata().catch(() => [null]);
+    if (!meta || !TIPI_DOKUMENTA.has(meta.contentType) || Number(meta.size) > 10 * 1024 * 1024) throw new HttpsError("invalid-argument", "Napačen dokument.");
+    dokazilo = { url, pot, tip: meta.contentType };
+  }
+  if (!besedilo && !dokazilo) throw new HttpsError("invalid-argument", "Napiši sporočilo.");
+  await mRef.collection("sporocila").add({ od: "mojster", besedilo, stroka, ...(dokazilo ? { dokazilo } : {}), ob: FieldValue.serverTimestamp() });
+  await mRef.update({ "posta.skrbnik": FieldValue.increment(1), "posta.zadnje": FieldValue.serverTimestamp(), ...(stroka ? { ["potrditveStrok." + stroka + ".odgovor"]: FieldValue.serverTimestamp() } : {}) });
+  const app = aplikacijaMojstra(md), kdo = md.firma || md.ime || "mojster", kje = stroka ? " (" + strokaIme(stroka) + ")" : "";
+  await pushSkrbniku(`${app} · odgovor mojstra${kje}: ${kdo}`, (dokazilo ? "Dokazilo. " : "") + besedilo.slice(0, 150), "/?popravko=" + encodeURIComponent(uid)).catch((e) => console.warn("pushSkrbniku", e.message));
+  await mod.posljiSkrbniku(`${app}: odgovor mojstra ${kdo}${kje}`, `${md.ime || ""}, ${md.firma || ""} (davčna ${md.davcna || "-"})
+${stroka ? "Stroka: " + strokaIme(stroka) + "\n" : ""}
+${besedilo || "(brez besedila)"}${dokazilo ? "\n\nDokazilo: " + url : ""}
+
+Pregled: ${PREGLED_URL}/?popravko=${encodeURIComponent(uid)}`);
+  return { ok: true };
+});
 
 /* ---------- brisanje podatkov ---------- */
 // Skrbnik izbriše mojstra: profil, ponudbe, ocene, slike. Dela, ki jih je imel prevzeta, se znova odprejo in stranka dobi obvestilo.
@@ -980,7 +1064,7 @@ async function pobrisiMojstra(uid) {
   }
   const [pon, oc] = await Promise.all([db.collection("ponudbe").where("mojster", "==", uid).get(), db.collection("ocene").where("za", "==", uid).get()]);
   await Promise.all([...pon.docs, ...oc.docs].map((x) => x.ref.delete()));
-  await Promise.all([db.doc("mojstri/" + uid).delete(), db.doc("profili/" + uid).delete()]);
+  await Promise.all([db.recursiveDelete(db.doc("mojstri/" + uid)), db.doc("profili/" + uid).delete()]);
   await admin.storage().bucket().deleteFiles({ prefix: "profil/" + uid + "/" }).catch((e) => console.warn("profil", e.message));
   await admin.storage().bucket().deleteFiles({ prefix: "dokumenti/" + uid + "/" }).catch((e) => console.warn("dokumenti", e.message));
   console.log("skrbnik izbrisal mojstra", uid, "del", dela.size, "ponudb", pon.size);
@@ -997,6 +1081,7 @@ exports.izbrisi = onCall({ invoker: "public" }, async (req) => {
   }
   batch.delete(db.doc("mojstri/" + uid));
   await batch.commit();
+  await db.recursiveDelete(db.collection("mojstri/" + uid + "/sporocila"));
   // Ponudbe (kot mojster ali stranka).
   const [p1, p2] = await Promise.all([db.collection("ponudbe").where("mojster", "==", uid).get(), db.collection("ponudbe").where("lastnik", "==", uid).get()]);
   await Promise.all([...p1.docs, ...p2.docs].map((d) => d.ref.delete()));

@@ -7,12 +7,12 @@ import { Geolocation } from "@capacitor/geolocation";
 import { initializeApp } from "firebase/app";
 import { initializeAuth, indexedDBLocalPersistence, signInAnonymously, onAuthStateChanged, connectAuthEmulator } from "firebase/auth";
 import {
-  initializeFirestore, doc, getDoc, getDocs, setDoc, updateDoc, collection, query, where, orderBy, limit,
+  initializeFirestore, doc, getDoc, getDocs, setDoc, updateDoc, collection, query, where, orderBy, limit, limitToLast,
   onSnapshot, serverTimestamp, deleteField, connectFirestoreEmulator
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
-import { STROKE, REGIJE, KDAJ, BUDGET, strokaIme, regijaIme, regijeDrzave, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavnaDavcna, cistaDavcna, veljavnaTuja, cistaTuja, testnaFirma, POGOJI_VERZIJA, BREZPLACNO, sklicIz, jePreverjen, imaPovrsino, m2Iz } from "./data.js";
+import { STROKE, REGIJE, KDAJ, BUDGET, strokaIme, regijaIme, regijeDrzave, dnevi, prosteUre, opisTermina, pred, veljavenTel, veljavenEmail, veljavnaDavcna, cistaDavcna, veljavnaTuja, cistaTuja, testnaFirma, POGOJI_VERZIJA, BREZPLACNO, sklicIz, jePreverjen, imaPovrsino, m2Iz } from "./data.js";
 import { t, mn, jz, jeSl, nastaviJezik, jezikNaprave, imeAplikacije, imeDrzave, decimalka, JEZIKI, IMENA_JEZIKOV } from "./i18n.js";
 import { DRZAVE, TUJE_REGIJE, EVRO, EU, vsaKljuc, jeVsa, pokriva, drzavaRegije, zaznajDrzavo, jezikDrzave } from "./drzave.js";
 import { FIXKO } from "./izdaja.js";
@@ -109,7 +109,7 @@ function initFb() {
 const call = (name, data) => httpsCallable(fns, name)(data).then((r) => r.data);
 
 /* ---------- stanje ---------- */
-const S = { ponudbe: [], moje: {}, myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true, profili: {} };
+const S = { ponudbe: [], moje: {}, myJobs: [], kontakti: {}, feed: [], taken: [], mojster: null, pay: null, seen: new Set(), firstFeed: true, profili: {}, sporocila: [] };
 let draft = { cat: "", photo: null, blob: null, opis: "", kdaj: KDAJ[0], doma: [], budget: "", m2: "" };
 const unsub = [];
 
@@ -138,6 +138,8 @@ if (native) {
   PushNotifications.addListener("pushNotificationActionPerformed", (a) => {
     const vloga = a.notification?.data?.vloga;
     if (vloga === "M" || vloga === "N") setRole(vloga);
+    // Sporočilo skrbnika: odpremo nit (ko se profil mojstra naloži).
+    if (a.notification?.data?.sporocilo) { S.odpriSporocila = true; if (S.mojster) sporocilaSheet(); }
   });
 }
 
@@ -543,6 +545,7 @@ function renderM() {
   const zaOceno = S.taken.filter((j) => j.status === "opravljeno" && !j.ocene?.N && !(prefs.neOcenim || []).includes(j.id)).slice(0, 3);
   view.innerHTML = `
   ${profilKartica(S.mojster, moja.length)}
+  ${S.mojster.posta?.mojster > 0 ? `<button class="potrdi sporocilo" type="button" id="sporocila">${ikona("sporocilo", 22, 2)}<div><b>${t("Sporočilo od {0}", IME())}</b><small>${t("Tapni za branje in odgovor.")}</small></div><span class="znacka">${S.mojster.posta.mojster}</span></button>` : ""}
   ${zaOceno.map((j) => `<div class="oceni-kartica"><div><b>${t("Delo je opravljeno")}</b><span>${esc(j.opis || strokaIme(j.stroka))}, ${esc(j.kraj)}. ${t("Želiš oceniti stranko? Ni obvezno.")}</span></div>
     <div class="row"><button class="btn small" type="button" data-oceni="${j.id}">${t("Oceni stranko")}</button><button class="btn small ghost" type="button" data-neocenim="${j.id}">${t("Ne, hvala")}</button></div></div>`).join("")}
   ${moja.length ? `<h2 class="mali">${t("Moji termini")}</h2><div class="zgodbe" aria-label="${t("Moji termini")}">${moja.map((j) => `<button type="button" class="zgodba" data-odpri="T:${j.id}"><span class="kr">${j.slika ? `<img src="${esc(j.slika)}" alt="">` : ikona(j.stroka, 30)}</span><small>${esc(opisTermina(j.termin))}</small></button>`).join("")}</div>` : ""}
@@ -550,6 +553,7 @@ function renderM() {
   <div class="feed">${prosta.length ? prosta.map(postM).join("") : `<div class="empty">${ikona("orodje", 40, 1.5)}<b>${t("Trenutno ni prostih del")}</b>${t("Ko nekdo v tvoji regiji rabi tvojo stroko, dobiš obvestilo.")}</div>`}</div>`;
   document.getElementById("edit").onclick = () => { S.urejam = true; renderM(); };
   document.getElementById("potrdiPodj")?.addEventListener("click", preveriSheet);
+  view.querySelectorAll("#sporocila, #sporocilaPovezava").forEach((b) => b.addEventListener("click", sporocilaSheet));
   vezi(view); osveziDet();
 }
 // Moj profil na vrhu strani mojstra: slika, ime, podjetje, stroke in kje dela.
@@ -560,8 +564,9 @@ function profilKartica(m, terminov) {
     <div class="pv">${m.slika ? `<img src="${esc(m.slika)}" alt="">` : `<span>${ikona("mojster", 34)}</span>`}
       <div><b>${esc(m.ime || t("Mojster"))}</b>${ocenaZnak(uid)}<span>${esc(m.firma || "")}</span>${m.davcna ? `<small>${t("Davčna {0}", esc(m.davcna))}</small>` : ""}</div>
       <button class="uredi" id="edit" type="button">${t("Uredi")}</button></div>
-    <div class="ps">${(m.stroke || []).map((k) => `<span>${ikona(k, 18, 2)}${esc(strokaIme(k))}</span>`).join("")}</div>
+    <div class="ps">${(m.stroke || []).map((k) => `<span${m.potrditveStrok?.[k]?.stanje === "caka" ? ` class="caka"` : ""}>${ikona(k, 18, 2)}${esc(strokaIme(k))}${m.potrditveStrok?.[k]?.stanje === "caka" ? ` <small>${t("čaka potrditev")}</small>` : ""}</span>`).join("")}</div>
     <div class="pr">${ikona("pin", 18, 2)}<span>${esc(reg)}</span></div>
+    ${S.sporocila.length ? `<button class="link" type="button" id="sporocilaPovezava">${ikona("sporocilo", 18, 2)} ${t("Sporočila")}</button>` : ""}
     ${jePreverjen(m) ? `<div class="prev">${ikona("kljukica", 16, 3)} ${t("Podjetje preverjeno")}</div>`
       : S.placilo?.iban ? `<button class="potrdi" type="button" id="potrdiPodj">${ikona("kljukica", 20, 2.4)}<div><b>${rocno ? t("Čakamo na pregled") : cakam ? t("Čakamo na tvoje nakazilo") : t("Potrdi podjetje")}</b><small>${rocno ? t("Podjetje pregledamo v 1 do 2 delovnih dneh. Ko je potrjeno, dobiš obvestilo.") : cakam ? t("Ko prispe, te potrdimo (običajno v nekaj minutah) in se lahko javljaš.") : m.preverjanje?.zavrnjeno ? (m.preverjanje.razlog === "dokument" ? t("Potrdila nismo mogli potrditi. Naloži jasnejše potrdilo.") : t("Nakazila nismo našli. Poskusi znova.")) : nacin === "upn" ? t("Enkratno nakazilo 1 centa s TRR podjetja dokaže, da je podjetje res tvoje. Potem se lahko javljaš na dela.") : nacin === "sepa" ? t("Enkratno nakazilo 1 centa (SEPA) z računa podjetja dokaže, da je podjetje res tvoje. Potem se lahko javljaš na dela.") : t("Pošlji podjetje v pregled. Ko je potrjeno, se lahko javljaš na dela.")}</small></div><span class="pusc">›</span></button>` : ""}
     <div class="pst"><div><b>${prostaDela().length}</b><small>${t("prostih del")}</small></div><div><b>${terminov}</b><small>${jeSl() ? (terminov === 1 ? "termin" : terminov === 2 ? "termina" : terminov === 3 || terminov === 4 ? "termini" : "terminov") : mn(terminov, "termin").replace(/^\d+\s*/, "")}</small></div><div><b>${Object.values(S.moje).filter((p) => p.status === "caka").length}</b><small>${t("čaka na stranko")}</small></div></div>
@@ -808,6 +813,9 @@ function renderProfil() {
     <input id="davcna" inputmode="numeric" maxlength="12" placeholder="12345678" value="${esc(m.davcna || "")}">`}
     <label for="mtel">${t("Telefon")}</label>
     <input id="mtel" type="tel" inputmode="tel" maxlength="20" placeholder="${telPrimer()}" value="${esc(m.tel || "")}">
+    <label for="memail">${t("E-pošta")} <span class="neobv">${t("neobvezno")}</span></label>
+    <input id="memail" type="email" inputmode="email" maxlength="120" autocomplete="email" autocapitalize="off" value="${esc(m.email || "")}">
+    <p class="hint">${t("Za sporočila, ko obvestila niso vklopljena.")}</p>
     <label>${t("Tvoja stroka")}</label>
     <div class="mreza" id="st">${STROKE.map(([k, n]) => `<button type="button" class="chip ikchip" data-k="${k}" aria-pressed="${sel.stroke.has(k)}">${ikona(k, 24)}<span>${t(n)}</span></button>`).join("")}</div>
     <label>${t("Kje delaš")}${tu ? ` <span class="neobv">${esc(imeDrzave(cc))}</span>` : ""}</label>
@@ -817,7 +825,7 @@ function renderProfil() {
     <button class="btn" type="button" id="save">${S.mojster ? t("Shrani") : t("Naprej")}</button>
     ${S.mojster ? `<button class="btn ghost" type="button" id="back">${t("Nazaj")}</button>` : ""}`;
     const keep = () => {
-      for (const [k, el] of [["ime", "ime"], ["firma", "firma"], ["davcna", "davcna"], ["tel", "mtel"]]) m[k] = document.getElementById(el).value;
+      for (const [k, el] of [["ime", "ime"], ["firma", "firma"], ["davcna", "davcna"], ["tel", "mtel"], ["email", "memail"]]) m[k] = document.getElementById(el).value;
       S.pd.soglasje = document.getElementById("sog").checked;
       S.pd.dotaknjen = true;
     };
@@ -840,6 +848,8 @@ function renderProfil() {
       const brezDavcne = testnaFirma(m.firma) && !davcnaOk(m.davcna); // testni mojster
       if (!brezDavcne && !davcnaOk(m.davcna)) return err(tu ? t("DDV številka ni pravilna, npr. {0}123456789.", cc === "GR" ? "EL" : cc) : t("Davčna številka ni pravilna. Ima 8 števk, npr. 12345678."));
       if (!veljavenTel(m.tel)) return err(t("Vpiši telefonsko številko, npr. {0}.", telPrimer()));
+      const email = m.email.trim();
+      if (email && !veljavenEmail(email)) return err(t("E-poštni naslov ni pravilen."));
       if (!sel.stroke.size) return err(t("Izberi vsaj eno stroko."));
       if (!regijeOk.length) return err(t("Izberi, kje delaš."));
       if (!soglasje) return err(t("Za objavo profila potrdi pogoje za mojstre."));
@@ -857,6 +867,7 @@ function renderProfil() {
           slika: slikaUrl, tel: m.tel.trim(), stroke: [...sel.stroke], regije: regijeOk, pogoji: POGOJI_VERZIJA, posodobljeno: serverTimestamp()
         };
         if (push) data.push = push;
+        if (email || S.mojster?.email) data.email = email;
         // Tuji mojster: država, jezik in časovni pas za obvestila; slovenski profil ostane brez teh polj.
         if (tu) data.drzava = cc; else if (S.mojster?.drzava) data.drzava = deleteField();
         Object.assign(data, jezikInPas());
@@ -977,7 +988,14 @@ function watchMojster() {
       }
     }
     if (prefs.role === "M" && !document.activeElement?.matches("input,select,textarea")) renderM();
+    if (S.mojster && S.odpriSporocila) sporocilaSheet();
   }, (e) => console.error("mojster", e)));
+  // Nit s skrbnikom (sporočila, zahteve za potrditev stroke, mojstrovi odgovori).
+  unsub.push(onSnapshot(query(collection(db, "mojstri", uid, "sporocila"), orderBy("ob"), limitToLast(200)), (snap) => {
+    S.sporocila = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
+    osveziSporocila();
+    if (prefs.role === "M" && S.mojster && !document.activeElement?.matches("input,select,textarea")) renderM();
+  }, () => {}));
   unsub.push(onSnapshot(query(collection(db, "dela"), where("mojster", "==", uid), orderBy("ustvarjeno", "desc"), limit(30)), (snap) => {
     S.taken = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
     S.taken.filter((j) => j.status === "prevzeto" && !S.kontakti[j.id]).forEach((j) => {
@@ -1152,6 +1170,66 @@ function preveriTujeSheet(nacin) {
         : nacin === "sepa" ? t("Potrdilo je naloženo. Ko prispe še nakazilo 0,01 €, te potrdimo.") : t("Podjetje pregledamo v 1 do 2 delovnih dneh. Ko je potrjeno, dobiš obvestilo."));
     } catch (x) { lbl.classList.remove("dis"); st.textContent = ""; el.hidden = false; el.textContent = napaka(x, t("Ni uspelo.")); }
     e.target.value = "";
+  };
+}
+// Sporočila skrbnika: prosto besedilo ali predloga (zahteva za potrditev stroke, potrjena ali odstranjena stroka) v jeziku aplikacije.
+const PREDLOGE = {
+  potrditev: (s) => t("Za stroko »{0}« v poslovnem registru ne najdemo registrirane dejavnosti. Pošlji nam kodo dejavnosti SKD (npr. 43.220) ali naloži dokazilo (izpis iz AJPES ali obrtno dovoljenje). Do takrat stroka čaka na potrditev.", s),
+  potrjena: (s) => t("Stroko »{0}« smo potrdili. Hvala!", s),
+  odstranjena: (s) => t("Stroko »{0}« smo odstranili s tvojega profila, ker zanjo v poslovnem registru ni registrirane dejavnosti. Če jo imaš, nam odgovori s kodo SKD ali dokazilom in jo vrnemo.", s)
+};
+const besediloSporocila = (s) => [PREDLOGE[s.vrsta]?.(strokaIme(s.stroka)) || "", s.besedilo || ""].filter(Boolean).join("\n\n");
+// Odprta stroka, ki čaka potrditev (na njo se veže odgovor in dokazilo).
+const cakaStroka = () => Object.entries(S.mojster?.potrditveStrok || {}).find(([, v]) => v.stanje === "caka")?.[0] || "";
+function osveziSporocila() {
+  const nit = document.querySelector("#nit");
+  if (!nit) return;
+  nit.innerHTML = S.sporocila.map((s) => `<div class="mehurcek ${s.od === "mojster" ? "moj" : ""}">
+    ${s.od === "mojster" ? "" : `<b>${s.stroka && s.vrsta !== "sporocilo" ? ikona(s.stroka, 16, 2) + " " + esc(strokaIme(s.stroka)) : esc(IME())}</b>`}
+    ${besediloSporocila(s) ? `<p>${esc(besediloSporocila(s))}</p>` : ""}
+    ${s.dokazilo ? `<a class="link" href="${esc(s.dokazilo.url)}" target="_blank" rel="noopener">${ikona("sponka", 16, 2)} ${t("Dokazilo")}</a>` : ""}
+    <small>${s.ob ? esc(pred(s.ob.toMillis())) : t("pravkar")}</small></div>`).join("");
+  nit.scrollTop = nit.scrollHeight;
+}
+function sporocilaSheet() {
+  S.odpriSporocila = false;
+  document.getElementById("sporocilaOkno")?.remove();
+  const d = document.createElement("div"); d.className = "sheet"; d.id = "sporocilaOkno";
+  d.innerHTML = `<div role="dialog" aria-label="${t("Sporočila")}"><h2 style="margin-top:0">${t("Sporočilo od {0}", IME())}</h2>
+    <div class="nit" id="nit"></div>
+    <textarea id="odg" rows="3" maxlength="1000" placeholder="${t("Napiši odgovor …")}"></textarea>
+    <div class="err" id="serr" hidden></div>
+    <div class="row"><label class="btn ghost small" for="dokaz">${ikona("sponka", 20, 2)} ${t("Naloži dokazilo")}</label><input id="dokaz" type="file" accept="image/*,application/pdf" hidden>
+      <button class="btn small" type="button" id="poslji">${t("Pošlji")}</button></div></div>`;
+  document.body.appendChild(d);
+  d.onclick = (e) => { if (e.target === d) d.remove(); };
+  osveziSporocila();
+  if (S.mojster?.posta?.mojster) call("sporociloSkrbniku", { prebrano: true }).catch(() => {});
+  const napakaOkna = (x) => { const el = d.querySelector("#serr"); el.hidden = false; el.textContent = napaka(x, t("Ni uspelo.")); };
+  const poslji = async (dokazilo) => {
+    const vnos = d.querySelector("#odg"), b = d.querySelector("#poslji"), besedilo = vnos.value.trim();
+    if (!besedilo && !dokazilo) return vnos.focus();
+    d.querySelector("#serr").hidden = true; b.disabled = true; b.textContent = t("Pošiljam ...");
+    try {
+      await call("sporociloSkrbniku", { besedilo, stroka: cakaStroka(), ...(dokazilo || {}) });
+      vnos.value = ""; toast(t("Hvala"), t("Sporočilo je poslano."));
+    } catch (x) { napakaOkna(x); }
+    b.disabled = false; b.textContent = t("Pošlji");
+  };
+  d.querySelector("#poslji").onclick = () => poslji(null);
+  d.querySelector("#dokaz").onchange = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      // Kot potrdilo o registraciji: slike pomanjšamo, PDF naložimo, kot je.
+      const pdf = f.type === "application/pdf";
+      if (pdf && f.size > 10 * 1024 * 1024) throw new Error(t("Datoteka je prevelika (največ 10 MB)."));
+      const blob = pdf ? f : (await shrink(f, 2200)).blob;
+      const pot = `dokumenti/${uid}/dokazilo-${Date.now()}.${pdf ? "pdf" : "jpg"}`, r = ref(storage, pot);
+      await uploadBytes(r, blob, { contentType: pdf ? "application/pdf" : "image/jpeg" });
+      await poslji({ pot, url: await getDownloadURL(r) });
+    } catch (x) { napakaOkna(x); }
   };
 }
 // Fixko zazna drugo državo kot v nastavitvah: enkrat vpraša, ali preklopi (država, regija, kraj in samodejni jezik).
