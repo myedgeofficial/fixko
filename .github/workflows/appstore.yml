@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       akcija:
-        description: "stanje | vpisi | slike | oddaj | drzave | bundle"
+        description: "stanje | vpisi | slike | oddaj | drzave | bundle | zamenjaj"
         default: "stanje"
       aplikacija:
         description: "popravko | fixko"
