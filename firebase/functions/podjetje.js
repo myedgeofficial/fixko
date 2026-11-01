@@ -7,8 +7,12 @@ const { ujema } = require("./banka");
 
 const EU = new Set("AT BE BG CY CZ DE DK EE ES FI FR GR HR HU IE IT LT LU LV MT NL PL PT RO SE SK".split(" "));
 // Modeli po vrsti; prvi, ki obstaja, prebere dokument (AI_MODEL v .env ga zamenja).
-const MODELI = (process.env.AI_MODEL || "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash").split(",").map((x) => x.trim()).filter(Boolean);
-const REGIJA_AI = process.env.AI_REGIJA || "europe-west1";
+// Gemini 2.5 za ta projekt ni več na voljo (404, 1. 11. 2026); 3.5 Flash in 3.1 Flash Lite delujeta v večregiji EU.
+const MODELI = (process.env.AI_MODEL || "gemini-3.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash").split(",").map((x) => x.trim()).filter(Boolean);
+// Večregija EU: dokument ostane v EU (posamezne evropske regije novih modelov nimajo).
+const REGIJA_AI = process.env.AI_REGIJA || "eu";
+// Naslov Vertex AI za lokacijo: regija (europe-west1), večregija EU (eu) ali global.
+const hostAI = (loc) => loc === "global" ? "aiplatform.googleapis.com" : loc === "eu" ? "aiplatform.eu.rep.googleapis.com" : `${loc}-aiplatform.googleapis.com`;
 
 const NAVODILO = `You check documents uploaded by tradespeople (plumbers, electricians, tilers, painters, carpenters, roofers, builders, cleaners, gardeners, movers, handymen ...) who register on a home-repair marketplace.
 The document should prove that the business is officially registered: a trade licence or business registration (e.g. Gewerbeschein, Gewerbeanmeldung, Handwerksrolle, GISA extract, Firmenbuch or Handelsregister extract, Kbis, visura camerale, KvK uittreksel, certificado censal, VAT registration certificate, court register extract).
@@ -45,7 +49,7 @@ async function preberiDokument(vsebina, tip) {
     generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: SHEMA }
   });
   for (const model of MODELI) {
-    const r = await fetch(`https://${REGIJA_AI}-aiplatform.googleapis.com/v1/projects/${projekt}/locations/${REGIJA_AI}/publishers/google/models/${model}:generateContent`,
+    const r = await fetch(`https://${hostAI(REGIJA_AI)}/v1/projects/${projekt}/locations/${REGIJA_AI}/publishers/google/models/${model}:generateContent`,
       { method: "POST", headers: { Authorization: "Bearer " + zeton, "content-type": "application/json" }, body: telo });
     const j = await r.json().catch(() => ({}));
     if (r.status === 404) { console.warn("ai model ni na voljo", model); continue; }
