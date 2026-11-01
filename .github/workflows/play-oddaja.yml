@@ -1,0 +1,47 @@
+name: Google Play oddaja
+
+# Odda Popravko.aab ali Fixko-play.aab iz izdaje "android" v Google Play, ali samo izpiše stanje (akcija stanje).
+# »Kaj je novega«: JSON {"sl": "...", "en": "..."} na poti opombe. V production samo z izrecnim OK uporabnika.
+on:
+  workflow_dispatch:
+    inputs:
+      akcija:
+        description: "oddaj | stanje"
+        default: "stanje"
+      aplikacija:
+        description: "popravko | fixko"
+        default: "popravko"
+      tir:
+        description: "internal | alpha | beta | production"
+        default: "internal"
+      status:
+        description: "completed | draft"
+        default: "completed"
+      opombe:
+        description: "pot do JSON z »kaj je novega« (neobvezno)"
+        default: ""
+
+jobs:
+  oddaja:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install google-api-python-client google-auth
+      - if: inputs.akcija == 'stanje'
+        run: python3 .github/scripts/play-stanje.py
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PAKETI: si.fixko.app com.remako.fixko
+      - if: inputs.akcija == 'oddaj'
+        run: gh release download android -p "${{ inputs.aplikacija == 'fixko' && 'Fixko-play.aab' || 'Popravko.aab' }}" -D "$RUNNER_TEMP"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - if: inputs.akcija == 'oddaj'
+        run: python3 .github/scripts/play-oddaja.py
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PAKET: ${{ inputs.aplikacija == 'fixko' && 'com.remako.fixko' || 'si.fixko.app' }}
+          AAB: ${{ runner.temp }}/${{ inputs.aplikacija == 'fixko' && 'Fixko-play.aab' || 'Popravko.aab' }}
+          OPOMBE: ${{ inputs.opombe }}
+          TIR: ${{ inputs.tir }}
+          STATUS: ${{ inputs.status }}
