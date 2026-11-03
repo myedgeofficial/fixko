@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dnevi, prosteUre, opisTermina, veljavenTel, pred } from "../src/data.js";
+import { dnevi, prosteUre, opisTermina, veljavenTel, veljavenEmail, pred } from "../src/data.js";
 
 test("termini: danes samo ure vsaj 1 h vnaprej, jutri vse", () => {
   const now = new Date(2026, 9, 11, 17, 30);
@@ -59,4 +59,9 @@ test("približno m²", async () => {
   assert.equal(m2Iz(""), 0);
   assert.equal(m2Iz("0"), 0);
   assert.ok(imaPovrsino("pleskanje") && !imaPovrsino("vodovod"));
+});
+
+test("e-pošta mojstra je neobvezna, a pravilna", () => {
+  assert.ok(veljavenEmail("marko@kos.si"));
+  assert.ok(!veljavenEmail("marko@kos") && !veljavenEmail("marko kos@kos.si") && !veljavenEmail(""));
 });

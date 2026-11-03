@@ -74,6 +74,8 @@ export function veljavenTel(t) {
   const st = String(t || "").replace(/[^\d]/g, "");
   return /^[+\d][\d\s/-]*$/.test(String(t || "").trim()) && st.length >= 8 && st.length <= 15;
 }
+// E-pošta mojstra (neobvezna, za sporočila skrbnika): enako preverja strežnik.
+export const veljavenEmail = (e) => /^[^\s@]{1,64}@[^\s@]+\.[a-z]{2,}$/i.test(String(e || "")) && String(e).length <= 120;
 // Slovenska davčna številka: 8 števk, zadnja je kontrolna (modul 11, uteži 8..2). Sprejme tudi "SI 12345678".
 // Testni mojster (samo za preizkušanje lastnikov): sme brez davčne številke.
 const TESTNA_FIRMA = "sraufnciger";

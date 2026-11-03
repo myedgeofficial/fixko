@@ -39,15 +39,17 @@ async function pregledSlik(urls) {
   } catch (e) { console.error("vision", e); return []; }
 }
 
-async function posljiSkrbniku(zadeva, besedilo) {
+// E-pošta prek Gmaila; odgovori gredo na support@remako.si.
+async function posljiMail(to, zadeva, besedilo, ime = "Popravko") {
   const user = process.env.MAIL_USER || "repusicurska@gmail.com", pass = (process.env.MAIL_PASS || "").replace(/\s/g, "");
-  if (!pass) { console.log("skrbnik (e-pošta ni nastavljena):", zadeva); return false; }
+  if (!pass) { console.log("e-pošta ni nastavljena:", zadeva); return false; }
   try {
     const nodemailer = require("nodemailer");
     const t = nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
-    await t.sendMail({ from: `Popravko <${user}>`, to: process.env.MAIL_TO || "support@remako.si", subject: zadeva, text: besedilo });
+    await t.sendMail({ from: `${ime} <${user}>`, replyTo: "support@remako.si", to, subject: zadeva, text: besedilo });
     return true;
   } catch (e) { console.error("e-pošta", e.message); return false; }
 }
+const posljiSkrbniku = (zadeva, besedilo) => posljiMail(process.env.MAIL_TO || "support@remako.si", zadeva, besedilo);
 
-module.exports = { neprimerno, gsIz, potIz, pregledSlik, posljiSkrbniku };
+module.exports = { neprimerno, gsIz, potIz, pregledSlik, posljiSkrbniku, posljiMail };

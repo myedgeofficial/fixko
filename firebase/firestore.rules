@@ -90,21 +90,26 @@ service cloud.firestore {
         && (!('slika' in d) || (besedilo(d.slika, 600) && d.slika.matches('(https://firebasestorage[.]googleapis[.]com|http://127[.]0[.]0[.]1:9199)/.*')))
         && (!('pogoji' in d) || besedilo(d.pogoji, 20))
         && (!('drzava' in d) || (d.drzava is string && d.drzava.matches('[A-Z]{2}')))
-        && (!('jezik' in d) || besedilo(d.jezik, 5)) && (!('tz' in d) || besedilo(d.tz, 60));
+        && (!('jezik' in d) || besedilo(d.jezik, 5)) && (!('tz' in d) || besedilo(d.tz, 60))
+        && (!('email' in d) || (besedilo(d.email, 120) && (d.email == '' || d.email.matches('[^ @]+@[^ @]+[.][A-Za-z]{2,}'))));
     }
     match /mojstri/{uid} {
       allow read: if prijavljen() && request.auth.uid == uid;
       allow create: if prijavljen() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno', 'drzava', 'jezik', 'tz'])
+        && request.resource.data.keys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno', 'drzava', 'jezik', 'tz', 'email'])
         && profil(request.resource.data)
         && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 20
         && request.resource.data.regije is list && request.resource.data.regije.size() <= 60;
       allow update: if prijavljen() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno', 'drzava', 'jezik', 'tz'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ime', 'firma', 'davcna', 'slika', 'pogoji', 'tel', 'stroke', 'regije', 'push', 'posodobljeno', 'drzava', 'jezik', 'tz', 'email'])
         && profil(request.resource.data)
         && request.resource.data.stroke is list && request.resource.data.stroke.size() <= 20
         && request.resource.data.regije is list && request.resource.data.regije.size() <= 60;
       allow delete: if false;
+      // Sporočila skrbnika in odgovori mojstra: bere jih samo mojster, piše samo strežnik.
+      match /sporocila/{id} {
+        allow read: if prijavljen() && request.auth.uid == uid;
+      }
     }
 
     // Ocene po opravljenem delu in povprečje na osebo. Vidijo jih vsi, piše samo strežnik (funkcija oceni).
