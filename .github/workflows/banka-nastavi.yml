@@ -1,0 +1,37 @@
+name: Banka (Enable Banking) – nastavi ključ
+
+# Ročni zagon: Application ID in zasebni ključ (.pem) iz skrivnosti EB_APP_ID in EB_KEY_PEM zapiše v
+# Firestore nastavitve/banka, ki jih berejo samo funkcije (banka.js). Ključa ne izpiše.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nastavi:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_PROJECT: ${{ vars.FIREBASE_PROJECT || 'fixko-app' }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Zapiši v nastavitve/banka
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EB_APP_ID: ${{ secrets.EB_APP_ID }}
+          EB_KEY_PEM: ${{ secrets.EB_KEY_PEM }}
+        run: |
+          if [ -z "$EB_APP_ID" ] || [ -z "$EB_KEY_PEM" ]; then echo "::error::Manjka EB_APP_ID ali EB_KEY_PEM."; exit 1; fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npm i --silent --no-audit --no-fund firebase-admin@13 >/dev/null
+          node -e '
+            const admin = require("firebase-admin");
+            admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT });
+            const k = process.env.EB_KEY_PEM;
+            if (!/BEGIN [A-Z ]*PRIVATE KEY/.test(k)) { console.error("Ključ ni zasebni ključ PEM."); process.exit(1); }
+            admin.firestore().doc("nastavitve/banka").set({ appId: process.env.EB_APP_ID, kljuc: k }, { merge: true })
+              .then(() => console.log("Banka nastavljena: appId", process.env.EB_APP_ID.slice(0, 8) + "…"));
+          '
