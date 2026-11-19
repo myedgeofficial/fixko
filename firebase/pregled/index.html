@@ -155,12 +155,12 @@
       if (!b.nastavljeno) return `<b>Banka:</b> <span class="znacka z-ni">ni nastavljena</span>`;
       const potekla = b.veljaDo && b.veljaDo < Date.now();
       return `<b>Banka (Enable Banking):</b>
-        <span class="znacka ${b.povezano && !potekla ? "z-potrjen" : "z-zavrnjen"}">${b.povezano ? (potekla ? "povezava potekla" : "povezana") : "ni povezana"}</span>
+        <span class="znacka ${b.povezano && !potekla && !b.znova ? "z-potrjen" : "z-zavrnjen"}">${b.povezano ? (potekla ? "povezava potekla" : b.znova ? "poveži znova" : "povezana") : "ni povezana"}</span>
         ${b.iban ? `<span>${esc(b.iban)}</span>` : ""}
         <span class="siva">velja do ${dan(b.veljaDo)}</span>
         <span class="siva">zadnji pregled ${kdaj(b.zadnji)}</span>
         ${b.napaka ? `<span class="err" style="margin:0">Napaka: ${esc(b.napaka)}</span>` : ""}
-        <span style="margin-left:auto;display:flex;gap:6px"><button class="ghost" data-a="banka-preglej">Preglej zdaj</button>${!b.povezano || potekla ? `<button class="ghost" data-a="banka-povezi">Poveži banko</button>` : ""}</span>`;
+        <span style="margin-left:auto;display:flex;gap:6px"><button class="ghost" data-a="banka-preglej">Preglej zdaj</button>${!b.povezano || potekla || b.znova ? `<button class="ghost" data-a="banka-povezi">Poveži banko</button>` : ""}</span>`;
     }
     function nakazilo(m) {
       if (m.stanje === "potrjen" && m.preverjeno) {

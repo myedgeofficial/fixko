@@ -47,7 +47,7 @@ async function seja(code, state) {
   const s = await eb(nast, "POST", "/sessions", { code });
   const racun = (s.accounts || []).find((a) => (a.account_id?.iban || "").replace(/\s/g, "") === IBAN) || (s.accounts || [])[0];
   if (!racun) throw new Error("Banka ni vrnila nobenega računa.");
-  await ref().update({ seja: s.session_id, racun: racun.uid, iban: racun.account_id?.iban || "", veljaDo: Timestamp.fromDate(new Date(s.access?.valid_until || Date.now() + 90 * 864e5)), state: FieldValue.delete(), napaka: FieldValue.delete() });
+  await ref().update({ seja: s.session_id, racun: racun.uid, iban: racun.account_id?.iban || "", veljaDo: Timestamp.fromDate(new Date(s.access?.valid_until || Date.now() + 90 * 864e5)), state: FieldValue.delete(), napaka: FieldValue.delete(), znova: FieldValue.delete(), tehnicno: FieldValue.delete() });
   return racun.account_id?.iban || "";
 }
 
@@ -83,7 +83,16 @@ async function preglej(potrdi) {
       const r = await eb(nast, "GET", `/accounts/${nast.racun}/transactions?date_from=${od}` + (kljuc ? `&continuation_key=${encodeURIComponent(kljuc)}` : ""));
       tx = tx.concat(r.transactions || []); kljuc = r.continuation_key || "";
     } while (kljuc && tx.length < 2000);
-  } catch (e) { await ref().update({ napaka: String(e.message).slice(0, 300), zadnji: Date.now() }); throw e; }
+  } catch (e) {
+    // Teo, 2026-11-19: OTP je vrnil ASPSP_ACCOUNT_NOT_ACCESSIBLE, čeprav je seja »veljala do 16. 5. 2027«: banka je soglasje
+    // preklicala ali ga ni dokončno potrdila. Takrat pregled pokaže razumljivo napako in gumb »Poveži banko«.
+    const znova = /ACCOUNT_NOT_ACCESSIBLE|EXPIRED_SESSION|SESSION_NOT_FOUND|CONSENT|: 401 |: 403 /i.test(String(e.message));
+    await ref().update({
+      napaka: znova ? "OTP ne dovoli več branja računa (soglasje je preklicano ali ni potrjeno). Klikni »Poveži banko« in se znova prijavi v OTP." : String(e.message).slice(0, 300),
+      tehnicno: String(e.message).slice(0, 300), znova, zadnji: Date.now()
+    });
+    throw e;
+  }
   const obdelani = new Set(nast.obdelani || []);
   const nova = tx.filter((t) => t.credit_debit_indicator === "CRDT" && Number(t.transaction_amount?.amount) === 0.01 && t.transaction_amount?.currency === "EUR");
   const kandidati = nova.map((t) => ({ id: t.entry_reference || t.transaction_id || crypto.createHash("sha1").update(JSON.stringify(t)).digest("hex"), t,
@@ -115,11 +124,11 @@ async function preglej(potrdi) {
       }
     }
   }
-  await ref().update({ obdelani: [...obdelani].slice(-500), zadnji: Date.now(), napaka: FieldValue.delete() });
+  await ref().update({ obdelani: [...obdelani].slice(-500), zadnji: Date.now(), napaka: FieldValue.delete(), znova: FieldValue.delete(), tehnicno: FieldValue.delete() });
   return { prilivov: nova.length, rezultat };
 }
 async function stanje() {
   const n = (await ref().get()).data() || {};
-  return { nastavljeno: !!(n.appId && n.kljuc), povezano: !!n.seja, iban: n.iban || "", veljaDo: n.veljaDo?.toMillis() || 0, zadnji: n.zadnji || 0, napaka: n.napaka || "" };
+  return { nastavljeno: !!(n.appId && n.kljuc), povezano: !!n.seja, iban: n.iban || "", veljaDo: n.veljaDo?.toMillis() || 0, zadnji: n.zadnji || 0, napaka: n.napaka || "", znova: !!n.znova };
 }
 module.exports = { povezi, seja, preglej, stanje, ujema, sklicV };
